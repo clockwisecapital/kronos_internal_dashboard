@@ -47,11 +47,31 @@ export default function HoldingsPage() {
     try {
       const supabase = createClient()
       
-      // Fetch holdings
+      // Get the most recent date first
+      const { data: dateData, error: dateError } = await supabase
+        .from('holdings')
+        .select('date')
+        .order('date', { ascending: false })
+        .limit(1)
+      
+      if (dateError) {
+        throw new Error(`Failed to fetch holdings date: ${dateError.message}`)
+      }
+      
+      if (!dateData || dateData.length === 0) {
+        setError('No holdings data available. Please upload holdings.csv in the Data Upload tab.')
+        setLoading(false)
+        return
+      }
+      
+      const latestDate = dateData[0].date
+      
+      // Fetch only holdings from the most recent date
       const { data: holdingsData, error: fetchError } = await supabase
         .from('holdings')
         .select('*')
-        .order('date', { ascending: false })
+        .eq('date', latestDate)
+        .order('market_value', { ascending: false })
       
       if (fetchError) {
         throw new Error(`Failed to fetch holdings: ${fetchError.message}`)
@@ -62,6 +82,31 @@ export default function HoldingsPage() {
         setLoading(false)
         return
       }
+      
+      console.log(`Holdings: Loaded ${holdingsData.length} holdings from date: ${latestDate}`)
+      
+      // Check for and remove duplicates
+      const tickerCounts = new Map<string, number>()
+      holdingsData.forEach(h => {
+        const count = tickerCounts.get(h.stock_ticker) || 0
+        tickerCounts.set(h.stock_ticker, count + 1)
+      })
+      
+      const duplicates = Array.from(tickerCounts.entries()).filter(([_, count]) => count > 1)
+      if (duplicates.length > 0) {
+        console.error('❌ DUPLICATE TICKERS IN HOLDINGS:', duplicates.map(([ticker, count]) => `${ticker} (${count}x)`).join(', '))
+      }
+      
+      // De-duplicate: Keep only first occurrence of each ticker
+      const uniqueHoldingsMap = new Map()
+      holdingsData.forEach(h => {
+        if (!uniqueHoldingsMap.has(h.stock_ticker)) {
+          uniqueHoldingsMap.set(h.stock_ticker, h)
+        }
+      })
+      
+      const deduplicatedHoldings = Array.from(uniqueHoldingsMap.values())
+      console.log(`Holdings: De-duplicated ${holdingsData.length} → ${deduplicatedHoldings.length}`)
       
       // Fetch weightings data
       const { data: weightingsData, error: weightingsError } = await supabase
@@ -77,12 +122,34 @@ export default function HoldingsPage() {
         weightingsData?.map(w => [w.ticker, { spy: w.spy, qqq: w.qqq }]) || []
       )
       
-      // Calculate derived fields per client requirements
-      const totalMarketValue = holdingsData.reduce((sum, h) => sum + h.market_value, 0)
+      // Fetch real-time prices from Yahoo Finance
+      let pricesMap = new Map<string, number>()
+      try {
+        console.log('Fetching real-time prices...')
+        const pricesResponse = await fetch('/api/prices')
+        if (pricesResponse.ok) {
+          const pricesData = await pricesResponse.json()
+          if (pricesData.success && pricesData.prices) {
+            pricesMap = new Map(
+              pricesData.prices.map((p: { ticker: string; currentPrice: number }) => [p.ticker, p.currentPrice])
+            )
+            console.log(`Loaded ${pricesMap.size} real-time prices`)
+          }
+        } else {
+          console.warn('Failed to fetch prices:', pricesResponse.statusText)
+        }
+      } catch (priceError) {
+        console.error('Error fetching real-time prices:', priceError)
+        // Continue without real-time prices - will use close_price
+      }
       
-      const holdingsWithCalcs: HoldingWithCalculations[] = holdingsData.map(h => {
-        // Use current_price if available, otherwise fall back to close_price
-        const effectivePrice = h.current_price || h.close_price
+      // Calculate derived fields per client requirements (use deduplicated data)
+      const totalMarketValue = deduplicatedHoldings.reduce((sum, h) => sum + h.market_value, 0)
+      
+      const holdingsWithCalcs: HoldingWithCalculations[] = deduplicatedHoldings.map(h => {
+        // Get real-time price from Yahoo Finance, fallback to current_price, then close_price
+        const realtimePrice = pricesMap.get(h.stock_ticker)
+        const effectivePrice = realtimePrice || h.current_price || h.close_price
         
         // Get weightings for this ticker
         const weights = weightingsMap.get(h.stock_ticker)
@@ -104,16 +171,22 @@ export default function HoldingsPage() {
         
         return {
           ...h,
+          // Store real-time price for display
+          current_price: realtimePrice || h.current_price,
           sp_weight: spyWeight,
           qqq_weight: qqqWeight,
           avg_index_weight: avgIndexWeight,
           index_ratio: indexRatio,
           // Weight: (Market Value / sum of all Market Value) * 100
           calculated_weight: calculatedWeight,
-          // Market Value: Use CSV market_value if no current_price, otherwise recalculate
-          calculated_market_value: h.current_price ? (h.current_price * h.shares) : h.market_value,
+          // Market Value: Use real-time price if available, otherwise CSV market_value
+          calculated_market_value: realtimePrice ? (realtimePrice * h.shares) : 
+                                   h.current_price ? (h.current_price * h.shares) : 
+                                   h.market_value,
           // % Change: (current_price/close_price - 1) * 100
-          calculated_pct_change: h.current_price ? ((h.current_price / h.close_price - 1) * 100) : 0
+          calculated_pct_change: realtimePrice ? ((realtimePrice / h.close_price - 1) * 100) :
+                                 h.current_price ? ((h.current_price / h.close_price - 1) * 100) : 
+                                 0
         }
       })
       
@@ -207,6 +280,19 @@ export default function HoldingsPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              setLoading(true)
+              fetchHoldings()
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            disabled={loading}
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Refresh Prices
+          </button>
           <div className="text-right">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">Total Portfolio Value</p>
             <p className="text-2xl font-bold text-zinc-900 dark:text-white">

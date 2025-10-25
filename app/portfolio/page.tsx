@@ -1,56 +1,133 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+
+interface PerformanceData {
+  name: string
+  daily: number
+  wtd: number
+  mtd: number
+  ytd: number
+}
+
+interface KeyMetric {
+  label: string
+  value: string
+}
+
+interface Holding {
+  ticker: string
+  weight: number
+}
+
+interface PortfolioData {
+  nav: number
+  performance: PerformanceData[]
+  keyMetrics: KeyMetric[]
+  holdings: Holding[]
+}
+
 export default function PortfolioPage() {
-  // Mock data - will be replaced with real API calls
-  const nav = 19067048
-  const performanceData = [
-    { name: 'TIME', daily: 0.8, wtd: 2.1, mtd: 5.4, ytd: 12.3 },
-    { name: 'SPY', daily: 0.6, wtd: 1.8, mtd: 4.2, ytd: 10.1 },
-    { name: 'QQQ', daily: 0.9, wtd: 2.3, mtd: 6.1, ytd: 14.5 },
-    { name: 'DIA', daily: 0.5, wtd: 1.5, mtd: 3.8, ytd: 8.7 },
-    { name: 'IWM', daily: 0.4, wtd: 1.2, mtd: 2.9, ytd: 6.2 },
-    { name: 'SMH', daily: 1.2, wtd: 3.1, mtd: 8.2, ytd: 18.9 },
-  ]
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null)
 
-  const keyMetrics = [
-    { label: 'Total Cash', value: '1.00%' },
-    { label: 'Clockwise Beta', value: '0.91x' },
-    { label: 'Beta Report 3-Yr', value: '0.79x' },
-    { label: 'Effective Hedge', value: '23.9%' },
-    { label: 'Crypto Exposure', value: '6.8%' },
-  ]
+  useEffect(() => {
+    fetchPortfolioData()
+  }, [])
 
-  const holdings = [
-    { ticker: 'NVDA', weight: 8.1 },
-    { ticker: 'AAPL', weight: 7.2 },
-    { ticker: 'MSFT', weight: 6.8 },
-    { ticker: 'TSLA', weight: 5.4 },
-    { ticker: 'META', weight: 4.9 },
-    { ticker: 'AMZN', weight: 4.5 },
-    { ticker: 'GOOGL', weight: 4.2 },
-    { ticker: 'NEM', weight: 4.2 },
-    { ticker: 'STRF', weight: 3.8 },
-    { ticker: 'UNH', weight: 3.5 },
-    { ticker: 'JPM', weight: 3.2 },
-    { ticker: 'V', weight: 3.0 },
-    { ticker: 'BRK.B', weight: 2.8 },
-    { ticker: 'JNJ', weight: 2.5 },
-    { ticker: 'PG', weight: 2.3 },
-    { ticker: 'DIS', weight: 2.1 },
-    { ticker: 'NFLX', weight: 2.0 },
-    { ticker: 'ADBE', weight: 1.9 },
-    { ticker: 'CRM', weight: 1.8 },
-    { ticker: 'INTC', weight: 1.7 },
-  ]
+  const fetchPortfolioData = async () => {
+    try {
+      setLoading(true)
+      setPortfolioData(null) // Clear existing data before fetching
+      
+      // Add cache-busting timestamp
+      const response = await fetch(`/api/portfolio?t=${Date.now()}`, {
+        cache: 'no-store'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch portfolio data')
+      }
+      
+      const result = await response.json()
+      
+      console.log('Portfolio API Response:', result)
+      
+      if (result.success && result.data) {
+        console.log('Setting NAV:', result.data.nav)
+        setPortfolioData(result.data)
+        setError(null)
+      } else {
+        throw new Error(result.message || 'Failed to load portfolio data')
+      }
+    } catch (err) {
+      console.error('Error fetching portfolio:', err)
+      setError(err instanceof Error ? err.message : 'Failed to load portfolio data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-zinc-600 dark:text-zinc-400">Loading portfolio data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !portfolioData) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="text-center max-w-md">
+          <svg className="w-16 h-16 text-zinc-400 dark:text-zinc-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">
+            Unable to Load Portfolio
+          </h3>
+          <p className="text-zinc-600 dark:text-zinc-400 mb-4">
+            {error || 'No portfolio data available'}
+          </p>
+          <button
+            onClick={fetchPortfolioData}
+            className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  const { nav, performance: performanceData, keyMetrics, holdings } = portfolioData
 
   return (
     <div className="p-6 space-y-6">
       {/* Page Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
-          Portfolio Overview
-        </h1>
-        <p className="text-zinc-600 dark:text-zinc-400 mt-1">
-          Current portfolio holdings and performance metrics
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
+            Portfolio Overview
+          </h1>
+          <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+            Current portfolio holdings and performance metrics
+          </p>
+        </div>
+        <button
+          onClick={fetchPortfolioData}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white font-medium rounded-lg transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          Refresh Data
+        </button>
       </div>
 
       {/* Top Section: NAV + Performance */}
