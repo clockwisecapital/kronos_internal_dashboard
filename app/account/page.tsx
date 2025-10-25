@@ -1,4 +1,3 @@
-import AccountForm from './account-form'
 import { createClient } from '@/app/utils/supabase/server'
 import { redirect } from 'next/navigation'
 
@@ -14,5 +13,6 @@ export default async function Account() {
         redirect('/login')
     }
 
-    return <AccountForm user={user} />
+    // If user is authenticated, redirect to portfolio (main dashboard)
+    redirect('/portfolio')
 }
