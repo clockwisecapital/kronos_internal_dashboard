@@ -76,7 +76,7 @@ export function calculatePercentChange(
 
 /**
  * Filter out invalid tickers for API fetching
- * Removes cash, money market funds, and special characters
+ * Removes cash, money market funds, and special characters .. test
  */
 export function filterValidTickers(tickers: string[]): string[] {
   return tickers.filter(ticker => {
