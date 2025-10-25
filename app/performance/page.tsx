@@ -34,44 +34,44 @@ export default function PerformancePage() {
     <div className="p-6 space-y-6">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
+        <h1 className="text-3xl font-bold text-white">
           Performance Attribution
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+        <p className="text-slate-400 mt-1">
           Individual holding performance and portfolio contribution analysis
         </p>
       </div>
 
       {/* Holdings Performance Table */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
+        <div className="p-6 border-b border-slate-700">
+          <h2 className="text-lg font-semibold text-white">
             Holdings Performance
           </h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+          <p className="text-sm text-slate-400 mt-1">
             Individual stock returns across different time periods
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="text-left py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+              <tr className="bg-slate-700 border-b border-slate-600">
+                <th className="text-left py-3 px-6 font-semibold text-white">
                   Ticker
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   Weight
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   1-Day
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   5-Day
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   30-Day
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   YTD
                 </th>
               </tr>
@@ -80,24 +80,24 @@ export default function PerformancePage() {
               {performanceData.map((stock) => (
                 <tr
                   key={stock.ticker}
-                  className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors"
+                  className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
                 >
-                  <td className="py-4 px-6 font-semibold text-zinc-900 dark:text-white">
+                  <td className="py-4 px-6 font-semibold text-white">
                     {stock.ticker}
                   </td>
-                  <td className="text-right py-4 px-6 text-zinc-600 dark:text-zinc-400">
+                  <td className="text-right py-4 px-6 text-slate-300">
                     {stock.weight.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.return1d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return1d > 0 ? '+' : ''}{stock.return1d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.return5d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return5d > 0 ? '+' : ''}{stock.return5d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.return30d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return30d > 0 ? '+' : ''}{stock.return30d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.returnYTD >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.returnYTD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.returnYTD > 0 ? '+' : ''}{stock.returnYTD.toFixed(1)}%
                   </td>
                 </tr>
@@ -108,32 +108,32 @@ export default function PerformancePage() {
       </div>
 
       {/* Contribution Breakdown Table */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-        <div className="p-6 border-b border-zinc-200 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
+        <div className="p-6 border-b border-slate-700">
+          <h2 className="text-lg font-semibold text-white">
             Contribution Breakdown
           </h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+          <p className="text-sm text-slate-400 mt-1">
             How much each position contributed to total portfolio return
           </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-zinc-50 dark:bg-zinc-800/50 border-b border-zinc-200 dark:border-zinc-800">
-                <th className="text-left py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+              <tr className="bg-slate-700 border-b border-slate-600">
+                <th className="text-left py-3 px-6 font-semibold text-white">
                   Ticker
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   1-Day Contrib.
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   5-Day Contrib.
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   30-Day Contrib.
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-zinc-900 dark:text-white">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   YTD Contribution
                 </th>
               </tr>
@@ -142,40 +142,40 @@ export default function PerformancePage() {
               {contributionData.map((stock) => (
                 <tr
                   key={stock.ticker}
-                  className="border-b border-zinc-100 dark:border-zinc-800/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors"
+                  className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
                 >
-                  <td className="py-4 px-6 font-semibold text-zinc-900 dark:text-white">
+                  <td className="py-4 px-6 font-semibold text-white">
                     {stock.ticker}
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib1d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.contrib1d > 0 ? '+' : ''}{stock.contrib1d.toFixed(2)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib5d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.contrib5d > 0 ? '+' : ''}{stock.contrib5d.toFixed(2)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib30d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.contrib30d > 0 ? '+' : ''}{stock.contrib30d.toFixed(2)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contribYTD >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contribYTD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.contribYTD > 0 ? '+' : ''}{stock.contribYTD.toFixed(2)}%
                   </td>
                 </tr>
               ))}
               {/* Totals Row */}
-              <tr className="bg-blue-50 dark:bg-blue-950/20 border-t-2 border-blue-200 dark:border-blue-900">
-                <td className="py-4 px-6 font-bold text-zinc-900 dark:text-white">
+              <tr className="bg-blue-900/30 border-t-2 border-blue-700">
+                <td className="py-4 px-6 font-bold text-white">
                   TOTAL PORTFOLIO
                 </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contrib1d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <td className={`text-right py-4 px-6 font-bold ${totals.contrib1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {totals.contrib1d > 0 ? '+' : ''}{totals.contrib1d.toFixed(2)}%
                 </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contrib5d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <td className={`text-right py-4 px-6 font-bold ${totals.contrib5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {totals.contrib5d > 0 ? '+' : ''}{totals.contrib5d.toFixed(2)}%
                 </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contrib30d >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <td className={`text-right py-4 px-6 font-bold ${totals.contrib30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {totals.contrib30d > 0 ? '+' : ''}{totals.contrib30d.toFixed(2)}%
                 </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contribYTD >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                <td className={`text-right py-4 px-6 font-bold ${totals.contribYTD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {totals.contribYTD > 0 ? '+' : ''}{totals.contribYTD.toFixed(2)}%
                 </td>
               </tr>

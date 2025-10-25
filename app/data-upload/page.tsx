@@ -55,10 +55,10 @@ export default function DataUploadPage() {
     <div className="p-6 max-w-7xl mx-auto">
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2">
+        <h1 className="text-3xl font-bold text-white mb-2">
           CSV Data Upload
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400">
+        <p className="text-slate-400">
           Upload daily/weekly CSV files exported from FactSet for processing
         </p>
       </div>
@@ -72,8 +72,8 @@ export default function DataUploadPage() {
           />
 
           {/* Processing Status */}
-          <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6">
-            <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">
+          <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-white mb-4">
               Processing Status
             </h3>
 
@@ -153,11 +153,11 @@ export default function DataUploadPage() {
           </div>
 
           {/* Info Card */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+          <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-4">
+            <h4 className="font-medium text-blue-300 mb-2">
               Accepted File Types
             </h4>
-            <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+            <ul className="text-sm text-blue-200 space-y-1">
               <li>• <strong>holdings.csv</strong> - Portfolio positions</li>
               <li>• <strong>prices.csv</strong> - Historical OHLCV data</li>
               <li>• <strong>fundamentals.csv</strong> - 22 scoring metrics</li>
@@ -173,7 +173,7 @@ export default function DataUploadPage() {
         <div>
           {uploadResponse && isMultiResponse(uploadResponse) && (
             <div className="space-y-4 max-h-[600px] overflow-y-auto">
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-white sticky top-0 bg-zinc-50 dark:bg-black py-2 z-10">
+              <h3 className="text-lg font-semibold text-white sticky top-0 bg-slate-900 py-2 z-10">
                 Upload Results ({uploadResponse.successCount} successful, {uploadResponse.failureCount} failed)
               </h3>
               {uploadResponse.results.map((result, idx) => (
@@ -193,7 +193,7 @@ export default function DataUploadPage() {
               ))}
               <button
                 onClick={resetUpload}
-                className="sticky bottom-0 w-full px-6 py-3 bg-zinc-600 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors"
+                className="sticky bottom-0 w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
               >
                 Upload More Files
               </button>
@@ -209,7 +209,7 @@ export default function DataUploadPage() {
               
               <button
                 onClick={resetUpload}
-                className="mt-4 w-full px-6 py-3 bg-zinc-600 hover:bg-zinc-700 text-white font-medium rounded-lg transition-colors"
+                className="mt-4 w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
               >
                 Upload Another File
               </button>
@@ -217,14 +217,14 @@ export default function DataUploadPage() {
           )}
 
           {!uploadResponse && !error && (
-            <div className="bg-zinc-50 dark:bg-zinc-900 rounded-lg border-2 border-dashed border-zinc-300 dark:border-zinc-700 p-12 text-center">
-              <svg className="w-24 h-24 mx-auto mb-4 text-zinc-400 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="bg-slate-800 rounded-lg border-2 border-dashed border-slate-600 p-12 text-center shadow-xl">
+              <svg className="w-24 h-24 mx-auto mb-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              <h3 className="text-xl font-semibold text-zinc-900 dark:text-white mb-2">
+              <h3 className="text-xl font-semibold text-white mb-2">
                 Ready to Upload
               </h3>
-              <p className="text-zinc-600 dark:text-zinc-400">
+              <p className="text-slate-400">
                 Select "Any (Auto-Detect)" to upload multiple files at once, or choose a specific file type
               </p>
             </div>

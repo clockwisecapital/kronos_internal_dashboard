@@ -73,8 +73,8 @@ export default function PortfolioPage() {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-zinc-600 dark:text-zinc-400">Loading portfolio data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-slate-300">Loading portfolio data...</p>
         </div>
       </div>
     )
@@ -84,18 +84,18 @@ export default function PortfolioPage() {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
         <div className="text-center max-w-md">
-          <svg className="w-16 h-16 text-zinc-400 dark:text-zinc-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-16 h-16 text-slate-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-2">
+          <h3 className="text-lg font-semibold text-white mb-2">
             Unable to Load Portfolio
           </h3>
-          <p className="text-zinc-600 dark:text-zinc-400 mb-4">
+          <p className="text-slate-400 mb-4">
             {error || 'No portfolio data available'}
           </p>
           <button
             onClick={fetchPortfolioData}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+            className="inline-flex items-center px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
           >
             Retry
           </button>
@@ -111,17 +111,17 @@ export default function PortfolioPage() {
       {/* Page Header */}
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
+          <h1 className="text-3xl font-bold text-white">
             Portfolio Overview
           </h1>
-          <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+          <p className="text-slate-400 mt-1">
             Current portfolio holdings and performance metrics
           </p>
         </div>
         <button
           onClick={fetchPortfolioData}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 text-white font-medium rounded-lg transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -134,11 +134,11 @@ export default function PortfolioPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* NAV Card */}
         <div className="lg:col-span-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-8 h-full flex flex-col justify-center">
-            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-2">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-8 h-full flex flex-col justify-center shadow-xl">
+            <p className="text-sm font-medium text-slate-400 mb-2">
               Net Asset Value
             </p>
-            <p className="text-4xl font-bold text-zinc-900 dark:text-white">
+            <p className="text-4xl font-bold text-white">
               ${nav.toLocaleString()}
             </p>
           </div>
@@ -146,26 +146,26 @@ export default function PortfolioPage() {
 
         {/* Performance Grid */}
         <div className="lg:col-span-8">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6 overflow-x-auto">
-            <p className="text-sm font-medium text-zinc-600 dark:text-zinc-400 mb-4">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 overflow-x-auto shadow-xl">
+            <p className="text-sm font-medium text-slate-400 mb-4">
               Performance Metrics
             </p>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800">
-                  <th className="text-left py-3 px-4 font-medium text-zinc-900 dark:text-white">
+                <tr className="border-b border-slate-600">
+                  <th className="text-left py-3 px-4 font-medium text-white">
                     Index
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-zinc-900 dark:text-white">
+                  <th className="text-right py-3 px-4 font-medium text-white">
                     Daily
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-zinc-900 dark:text-white">
+                  <th className="text-right py-3 px-4 font-medium text-white">
                     WTD
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-zinc-900 dark:text-white">
+                  <th className="text-right py-3 px-4 font-medium text-white">
                     MTD
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-zinc-900 dark:text-white">
+                  <th className="text-right py-3 px-4 font-medium text-white">
                     YTD
                   </th>
                 </tr>
@@ -175,10 +175,10 @@ export default function PortfolioPage() {
                   <tr
                     key={row.name}
                     className={`${
-                      idx === 0 ? 'bg-blue-50 dark:bg-blue-950/20' : ''
-                    } border-b border-zinc-100 dark:border-zinc-800/50`}
+                      idx === 0 ? 'bg-blue-900/30' : ''
+                    } border-b border-slate-700/50`}
                   >
-                    <td className="py-3 px-4 font-medium text-zinc-900 dark:text-white">
+                    <td className="py-3 px-4 font-medium text-white">
                       {row.name}
                     </td>
                     <td className={`text-right py-3 px-4 ${row.daily >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -206,12 +206,12 @@ export default function PortfolioPage() {
         {keyMetrics.map((metric) => (
           <div
             key={metric.label}
-            className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6"
+            className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg"
           >
-            <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">
+            <p className="text-xs font-medium text-slate-400 mb-2">
               {metric.label}
             </p>
-            <p className="text-2xl font-bold text-zinc-900 dark:text-white">
+            <p className="text-2xl font-bold text-white">
               {metric.value}
             </p>
           </div>
@@ -219,20 +219,20 @@ export default function PortfolioPage() {
       </div>
 
       {/* Holdings Grid */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 p-6">
-        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl">
+        <h2 className="text-lg font-semibold text-white mb-4">
           Current Holdings
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {holdings.map((holding) => (
             <div
               key={holding.ticker}
-              className="bg-zinc-50 dark:bg-zinc-800/50 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700 hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer"
+              className="bg-slate-700 rounded-lg p-4 border border-slate-600 hover:border-blue-400 hover:bg-slate-600 transition-colors cursor-pointer"
             >
-              <p className="font-semibold text-zinc-900 dark:text-white text-sm mb-1">
+              <p className="font-semibold text-white text-sm mb-1">
                 {holding.ticker}
               </p>
-              <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              <p className="text-lg font-bold text-blue-400">
                 {holding.weight.toFixed(1)}%
               </p>
             </div>

@@ -24,7 +24,7 @@ export default function TabNavigation() {
   const pathname = usePathname()
 
   return (
-    <nav className="h-15 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 overflow-x-auto">
+    <nav className="h-15 bg-slate-800 border-b border-slate-700 overflow-x-auto">
       <div className="flex items-center h-full px-6">
         {tabs.map((tab) => {
           const isActive = pathname === tab.path
@@ -37,8 +37,8 @@ export default function TabNavigation() {
                 border-b-2 -mb-px
                 ${
                   isActive
-                    ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700'
+                    ? 'border-blue-500 text-blue-400 bg-slate-700/50'
+                    : 'border-transparent text-slate-300 hover:text-white hover:bg-slate-700/30 hover:border-slate-600'
                 }
               `}
             >

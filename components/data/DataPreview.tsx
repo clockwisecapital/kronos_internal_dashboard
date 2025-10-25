@@ -17,24 +17,24 @@ export default function DataPreview({ data, fileName }: DataPreviewProps) {
   const hasErrors = data.errors && data.errors.length > 0
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6">
-      <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 shadow-xl">
+      <h3 className="text-lg font-semibold text-white mb-4">
         Data Preview
       </h3>
 
       {/* File Info */}
       <div className="mb-4 flex items-center gap-4 text-sm">
         <div>
-          <span className="text-zinc-600 dark:text-zinc-400">File: </span>
-          <span className="font-medium text-zinc-900 dark:text-white">{fileName}</span>
+          <span className="text-slate-400">File: </span>
+          <span className="font-medium text-white">{fileName}</span>
         </div>
         <div>
-          <span className="text-zinc-600 dark:text-zinc-400">Rows: </span>
-          <span className="font-medium text-zinc-900 dark:text-white">{data.rowCount}</span>
+          <span className="text-slate-400">Rows: </span>
+          <span className="font-medium text-white">{data.rowCount}</span>
         </div>
         <div>
-          <span className="text-zinc-600 dark:text-zinc-400">Columns: </span>
-          <span className="font-medium text-zinc-900 dark:text-white">{columns.length}</span>
+          <span className="text-slate-400">Columns: </span>
+          <span className="font-medium text-white">{columns.length}</span>
         </div>
       </div>
 
@@ -81,20 +81,20 @@ export default function DataPreview({ data, fileName }: DataPreviewProps) {
       )}
 
       {/* Data Table */}
-      <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-lg">
+      <div className="overflow-x-auto border border-slate-600 rounded-lg">
         <table className="w-full text-sm">
-          <thead className="bg-zinc-50 dark:bg-zinc-800/50">
+          <thead className="bg-slate-700">
             <tr>
               {columns.slice(0, 6).map((col) => (
                 <th
                   key={col}
-                  className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-700"
+                  className="px-4 py-3 text-left font-medium text-white border-b border-slate-600"
                 >
                   {col}
                 </th>
               ))}
               {columns.length > 6 && (
-                <th className="px-4 py-3 text-left font-medium text-zinc-700 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-700">
+                <th className="px-4 py-3 text-left font-medium text-white border-b border-slate-600">
                   ...
                 </th>
               )}
@@ -106,18 +106,18 @@ export default function DataPreview({ data, fileName }: DataPreviewProps) {
               return (
                 <tr
                   key={idx}
-                  className="border-b border-zinc-200 dark:border-zinc-800 last:border-0 hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
+                  className="border-b border-slate-700 last:border-0 hover:bg-slate-700/50"
                 >
                   {columns.slice(0, 6).map((col) => (
                     <td
                       key={col}
-                      className="px-4 py-3 text-zinc-900 dark:text-zinc-100"
+                      className="px-4 py-3 text-white"
                     >
                       {formatValue(recordObj[col])}
                     </td>
                   ))}
                   {columns.length > 6 && (
-                    <td className="px-4 py-3 text-zinc-500 dark:text-zinc-500">
+                    <td className="px-4 py-3 text-slate-400">
                       ...
                     </td>
                   )}
@@ -130,7 +130,7 @@ export default function DataPreview({ data, fileName }: DataPreviewProps) {
 
       {/* Show more indicator */}
       {data.rowCount > 10 && (
-        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400 text-center">
+        <p className="mt-3 text-sm text-slate-400 text-center">
           Showing first 10 of {data.rowCount} rows
         </p>
       )}

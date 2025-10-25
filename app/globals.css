@@ -1,15 +1,9 @@
 @import "tailwindcss";
 
+/* Force dark navy blue theme */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #0F172A; /* Dark Navy Blue */
+  --foreground: #F8FAFC; /* Almost white */
 }
 
 body {

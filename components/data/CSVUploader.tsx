@@ -185,21 +185,21 @@ export default function CSVUploader({ onUploadComplete, onUploadError }: CSVUplo
   }
 
   return (
-    <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 p-6">
-      <h3 className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">
+    <div className="bg-slate-800 rounded-lg border border-slate-700 p-6 shadow-xl">
+      <h3 className="text-lg font-semibold text-white mb-4">
         Upload Files
       </h3>
 
       {/* File Type Selector */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+        <label className="block text-sm font-medium text-slate-300 mb-2">
           Select File Type:
         </label>
         <select
           value={fileType}
           onChange={(e) => setFileType(e.target.value as CSVFileType)}
           disabled={isUploading}
-          className="w-full px-4 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+          className="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         >
           {FILE_TYPE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -219,8 +219,8 @@ export default function CSVUploader({ onUploadComplete, onUploadError }: CSVUplo
         className={`
           relative border-2 border-dashed rounded-lg p-12 text-center cursor-pointer transition-colors
           ${isDragging 
-            ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/10' 
-            : 'border-zinc-300 dark:border-zinc-700 hover:border-cyan-400 dark:hover:border-cyan-600'
+            ? 'border-blue-400 bg-blue-900/20' 
+            : 'border-slate-600 hover:border-blue-500'
           }
           ${isUploading ? 'pointer-events-none opacity-50' : ''}
         `}
@@ -235,7 +235,7 @@ export default function CSVUploader({ onUploadComplete, onUploadError }: CSVUplo
           className="hidden"
         />
 
-        <svg className="w-16 h-16 mx-auto mb-4 text-zinc-400 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-16 h-16 mx-auto mb-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
         
@@ -243,19 +243,19 @@ export default function CSVUploader({ onUploadComplete, onUploadError }: CSVUplo
           <div>
             {selectedFiles.length === 1 ? (
               <>
-                <p className="text-lg font-medium text-zinc-900 dark:text-white mb-2">
+                <p className="text-lg font-medium text-white mb-2">
                   {selectedFiles[0].name}
                 </p>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                <p className="text-sm text-slate-400">
                   {(selectedFiles[0].size / 1024).toFixed(2)} KB
                 </p>
               </>
             ) : (
               <>
-                <p className="text-lg font-medium text-zinc-900 dark:text-white mb-2">
+                <p className="text-lg font-medium text-white mb-2">
                   {selectedFiles.length} files selected
                 </p>
-                <div className="text-sm text-zinc-600 dark:text-zinc-400 max-h-20 overflow-y-auto">
+                <div className="text-sm text-slate-400 max-h-20 overflow-y-auto">
                   {selectedFiles.map((f, idx) => (
                     <div key={idx}>• {f.name}</div>
                   ))}
@@ -265,13 +265,13 @@ export default function CSVUploader({ onUploadComplete, onUploadError }: CSVUplo
           </div>
         ) : (
           <div>
-            <p className="text-lg font-medium text-zinc-900 dark:text-white mb-2">
+            <p className="text-lg font-medium text-white mb-2">
               {isMultiMode ? 'Drag & Drop Multiple CSV Files' : 'Drag & Drop CSV File Here'}
             </p>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+            <p className="text-sm text-slate-400 mb-4">
               or click to browse
             </p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-500">
+            <p className="text-xs text-slate-500">
               {isMultiMode ? 'Drop multiple files for batch upload' : 'Accepted: holdings.csv, prices.csv, fundamentals.csv,'}<br />
               {!isMultiMode && 'benchmarks.csv, sector_valuations.csv,'}<br />
               {!isMultiMode && 'cycle_indicators.csv, model_portfolios.csv'}
@@ -284,16 +284,16 @@ export default function CSVUploader({ onUploadComplete, onUploadError }: CSVUplo
       {isUploading && (
         <div className="mt-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-sm font-medium text-slate-300">
               {isMultiMode ? `Uploading file ${currentFileIndex + 1} of ${selectedFiles.length}...` : 'Uploading...'}
             </span>
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            <span className="text-sm font-medium text-slate-300">
               {uploadProgress}%
             </span>
           </div>
-          <div className="w-full bg-zinc-200 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
             <div
-              className="bg-blue-600 h-full transition-all duration-300"
+              className="bg-blue-500 h-full transition-all duration-300"
               style={{ width: `${uploadProgress}%` }}
             />
           </div>
@@ -304,7 +304,7 @@ export default function CSVUploader({ onUploadComplete, onUploadError }: CSVUplo
       <button
         onClick={handleUpload}
         disabled={selectedFiles.length === 0 || isUploading}
-        className="mt-4 w-full px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-400 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+        className="mt-4 w-full px-6 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
       >
         {isUploading ? 'Processing...' : (isMultiMode && selectedFiles.length > 1 ? `Upload ${selectedFiles.length} Files` : 'Upload & Process')}
       </button>

@@ -20,12 +20,12 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="min-h-screen bg-zinc-50 dark:bg-black font-sans antialiased">
-        <div className="flex flex-col h-screen">
+    <html lang="en" className={`dark ${inter.variable}`}>
+      <body className="min-h-screen bg-slate-900 text-white font-sans antialiased">
+        <div className="flex flex-col h-screen bg-slate-900">
           <Header />
           <TabNavigation />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-1 overflow-y-auto bg-slate-900">
             {children}
           </main>
         </div>
