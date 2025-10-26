@@ -1,8 +1,29 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+interface RiskMetrics {
+  sharpeRatio: number | null
+  annualizedVolatility: number | null
+  var95: number | null
+  maxDrawdown: number | null
+  daysOfData: number
+  requiresDays: number
+}
+
+interface SnapshotStats {
+  total_snapshots: number
+  last_updated: string
+  last_snapshot_date: string
+  latest_nav: number
+}
 
 export default function RiskPage() {
+  const [riskMetrics, setRiskMetrics] = useState<RiskMetrics | null>(null)
+  const [loadingMetrics, setLoadingMetrics] = useState(true)
+  const [snapshotStats, setSnapshotStats] = useState<SnapshotStats | null>(null)
+  const [capturingSnapshot, setCapturingSnapshot] = useState(false)
+  const [snapshotMessage, setSnapshotMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
   const [scoreInputs, setScoreInputs] = useState({
     ticker: '',
     // Valuation
@@ -33,12 +54,85 @@ export default function RiskPage() {
     finLeverage: '',
   })
 
-  const riskMetrics = [
-    { label: 'Sharpe Ratio', value: '0.67', description: 'Risk-adjusted return' },
-    { label: 'Annualized Volatility', value: '55.69%', description: 'Standard deviation' },
-    { label: 'VaR 95%', value: '-3.41%', description: 'Value at Risk' },
-    { label: 'Max Drawdown', value: '-12.5%', description: 'Largest decline' },
-  ]
+  // Fetch risk metrics and snapshot stats on mount
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoadingMetrics(true)
+        
+        // Fetch risk metrics
+        const metricsResponse = await fetch('/api/risk/metrics')
+        const metricsJson = await metricsResponse.json()
+        if (metricsJson.success && metricsJson.data) {
+          setRiskMetrics(metricsJson.data)
+        }
+        
+        // Fetch snapshot stats
+        const statsResponse = await fetch('/api/snapshot')
+        const statsJson = await statsResponse.json()
+        if (statsJson.success && statsJson.data) {
+          setSnapshotStats(statsJson.data)
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error)
+      } finally {
+        setLoadingMetrics(false)
+      }
+    }
+
+    fetchData()
+  }, [])
+
+  // Capture portfolio snapshot
+  async function handleCaptureSnapshot() {
+    try {
+      setCapturingSnapshot(true)
+      setSnapshotMessage(null)
+      
+      const response = await fetch('/api/snapshot', {
+        method: 'POST',
+        credentials: 'include'
+      })
+      
+      const json = await response.json()
+      
+      if (json.success) {
+        const isUpdate = json.data.isUpdate
+        setSnapshotMessage({
+          type: 'success',
+          text: isUpdate 
+            ? `Snapshot updated! NAV: $${json.data.nav.toLocaleString()} (same day, latest prices)`
+            : `Snapshot captured! NAV: $${json.data.nav.toLocaleString()} (new day added)`
+        })
+        
+        // Refresh risk metrics and snapshot stats after snapshot
+        const metricsResponse = await fetch('/api/risk/metrics')
+        const metricsJson = await metricsResponse.json()
+        if (metricsJson.success && metricsJson.data) {
+          setRiskMetrics(metricsJson.data)
+        }
+        
+        const statsResponse = await fetch('/api/snapshot')
+        const statsJson = await statsResponse.json()
+        if (statsJson.success && statsJson.data) {
+          setSnapshotStats(statsJson.data)
+        }
+      } else {
+        setSnapshotMessage({
+          type: json.message?.includes('already exists') ? 'info' : 'error',
+          text: json.message || 'Failed to capture snapshot'
+        })
+      }
+    } catch (error) {
+      console.error('Error capturing snapshot:', error)
+      setSnapshotMessage({
+        type: 'error',
+        text: 'Failed to capture snapshot'
+      })
+    } finally {
+      setCapturingSnapshot(false)
+    }
+  }
 
   const vix = {
     level: 18.42,
@@ -59,34 +153,229 @@ export default function RiskPage() {
     <div className="p-6 space-y-6">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white">
-          Risk Assessment
-        </h1>
-        <p className="text-slate-400 mt-1">
-          Portfolio risk metrics, market conditions, and stock scoring system
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-white">
+              Risk Assessment
+            </h1>
+            <p className="text-slate-400 mt-1">
+              Portfolio risk metrics, market conditions, and stock scoring system
+            </p>
+            {/* Last Snapshot Indicator */}
+            {snapshotStats && snapshotStats.last_updated && (
+              <div className="flex items-center gap-2 mt-2 text-sm">
+                <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-slate-500">
+                  Last snapshot: {new Date(snapshotStats.last_updated).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
+                </span>
+                <span className="text-slate-600">•</span>
+                <span className="text-slate-500">
+                  {snapshotStats.total_snapshots} day{snapshotStats.total_snapshots !== 1 ? 's' : ''} collected
+                </span>
+              </div>
+            )}
+          </div>
+          
+          {/* Snapshot Capture Button */}
+          <button
+            onClick={handleCaptureSnapshot}
+            disabled={capturingSnapshot}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors shadow-lg flex items-center gap-2"
+          >
+            {capturingSnapshot ? (
+              <>
+                <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                Capturing...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+                Capture Snapshot
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Snapshot Message */}
+        {snapshotMessage && (
+          <div className={`mt-4 p-4 rounded-lg border ${
+            snapshotMessage.type === 'success' 
+              ? 'bg-green-900/20 border-green-800 text-green-400' 
+              : snapshotMessage.type === 'info'
+              ? 'bg-blue-900/20 border-blue-800 text-blue-400'
+              : 'bg-red-900/20 border-red-800 text-red-400'
+          }`}>
+            <div className="flex items-center gap-2">
+              {snapshotMessage.type === 'success' && (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              )}
+              {snapshotMessage.type === 'info' && (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              )}
+              {snapshotMessage.type === 'error' && (
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              )}
+              <span className="font-medium">{snapshotMessage.text}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Top Section: Risk Metrics + VIX + Market Downside */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Risk Metrics */}
         <div className="lg:col-span-4 space-y-4">
-          {riskMetrics.map((metric) => (
-            <div
-              key={metric.label}
-              className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg"
-            >
-              <p className="text-xs font-medium text-slate-400 mb-1">
-                {metric.label}
-              </p>
-              <p className="text-2xl font-bold text-white mb-1">
-                {metric.value}
-              </p>
-              <p className="text-xs text-slate-500">
-                {metric.description}
-              </p>
-            </div>
-          ))}
+          {/* Sharpe Ratio */}
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg">
+            <p className="text-xs font-medium text-slate-400 mb-1">
+              Sharpe Ratio
+            </p>
+            {loadingMetrics ? (
+              <div className="text-slate-400">
+                <div className="h-8 w-16 bg-slate-700 rounded animate-pulse"></div>
+              </div>
+            ) : riskMetrics && riskMetrics.sharpeRatio !== null ? (
+              <>
+                <p className="text-2xl font-bold text-white mb-1">
+                  {riskMetrics.sharpeRatio.toFixed(2)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Risk-adjusted return
+                </p>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Collecting data...</p>
+                <p className="text-xs text-slate-500 mb-2">
+                  {riskMetrics?.daysOfData || 0}/{riskMetrics?.requiresDays || 30} days
+                </p>
+                <div className="w-full bg-slate-700 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${((riskMetrics?.daysOfData || 0) / (riskMetrics?.requiresDays || 30)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Annualized Volatility */}
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg">
+            <p className="text-xs font-medium text-slate-400 mb-1">
+              Annualized Volatility
+            </p>
+            {loadingMetrics ? (
+              <div className="text-slate-400">
+                <div className="h-8 w-16 bg-slate-700 rounded animate-pulse"></div>
+              </div>
+            ) : riskMetrics && riskMetrics.annualizedVolatility !== null ? (
+              <>
+                <p className="text-2xl font-bold text-white mb-1">
+                  {riskMetrics.annualizedVolatility.toFixed(2)}%
+                </p>
+                <p className="text-xs text-slate-500">
+                  Standard deviation
+                </p>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Collecting data...</p>
+                <p className="text-xs text-slate-500 mb-2">
+                  {riskMetrics?.daysOfData || 0}/{riskMetrics?.requiresDays || 30} days
+                </p>
+                <div className="w-full bg-slate-700 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${((riskMetrics?.daysOfData || 0) / (riskMetrics?.requiresDays || 30)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* VaR 95% */}
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg">
+            <p className="text-xs font-medium text-slate-400 mb-1">
+              VaR 95%
+            </p>
+            {loadingMetrics ? (
+              <div className="text-slate-400">
+                <div className="h-8 w-16 bg-slate-700 rounded animate-pulse"></div>
+              </div>
+            ) : riskMetrics && riskMetrics.var95 !== null ? (
+              <>
+                <p className="text-2xl font-bold text-white mb-1">
+                  {riskMetrics.var95.toFixed(2)}%
+                </p>
+                <p className="text-xs text-slate-500">
+                  Value at Risk
+                </p>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Collecting data...</p>
+                <p className="text-xs text-slate-500 mb-2">
+                  {riskMetrics?.daysOfData || 0}/{riskMetrics?.requiresDays || 30} days
+                </p>
+                <div className="w-full bg-slate-700 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${((riskMetrics?.daysOfData || 0) / (riskMetrics?.requiresDays || 30)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Max Drawdown */}
+          <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-lg">
+            <p className="text-xs font-medium text-slate-400 mb-1">
+              Max Drawdown
+            </p>
+            {loadingMetrics ? (
+              <div className="text-slate-400">
+                <div className="h-8 w-16 bg-slate-700 rounded animate-pulse"></div>
+              </div>
+            ) : riskMetrics && riskMetrics.maxDrawdown !== null ? (
+              <>
+                <p className="text-2xl font-bold text-white mb-1">
+                  {riskMetrics.maxDrawdown.toFixed(2)}%
+                </p>
+                <p className="text-xs text-slate-500">
+                  Largest decline
+                </p>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm text-slate-400 mb-2">Collecting data...</p>
+                <p className="text-xs text-slate-500 mb-2">
+                  {riskMetrics?.daysOfData || 0}/{riskMetrics?.requiresDays || 30} days
+                </p>
+                <div className="w-full bg-slate-700 rounded-full h-2">
+                  <div 
+                    className="bg-blue-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${((riskMetrics?.daysOfData || 0) / (riskMetrics?.requiresDays || 30)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* VIX Indicator + Market Downside */}

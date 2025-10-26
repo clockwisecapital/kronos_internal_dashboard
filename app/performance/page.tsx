@@ -1,33 +1,102 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
+interface HoldingPerformance {
+  ticker: string
+  weight: number
+  return_1d: number
+  return_5d: number
+  return_30d: number
+  return_ytd: number
+  contribution_1d: number
+  contribution_5d: number
+  contribution_30d: number
+  contribution_ytd: number
+}
+
+interface PortfolioTotals {
+  total_contribution_1d: number
+  total_contribution_5d: number
+  total_contribution_30d: number
+  total_contribution_ytd: number
+}
+
 export default function PerformancePage() {
-  // Mock data - will be replaced with real API calls
-  const performanceData = [
-    { ticker: 'NVDA', weight: 8.1, return1d: 2.3, return5d: 4.5, return30d: 12.1, returnYTD: 85.2 },
-    { ticker: 'AAPL', weight: 7.2, return1d: 0.8, return5d: 2.1, return30d: 5.4, returnYTD: 28.3 },
-    { ticker: 'MSFT', weight: 6.8, return1d: 1.1, return5d: 3.2, return30d: 7.8, returnYTD: 35.7 },
-    { ticker: 'TSLA', weight: 5.4, return1d: -0.5, return5d: 1.8, return30d: 9.2, returnYTD: 42.1 },
-    { ticker: 'META', weight: 4.9, return1d: 1.5, return5d: 4.8, return30d: 11.3, returnYTD: 68.9 },
-    { ticker: 'AMZN', weight: 4.5, return1d: 0.9, return5d: 2.5, return30d: 6.8, returnYTD: 32.4 },
-    { ticker: 'GOOGL', weight: 4.2, return1d: 1.2, return5d: 3.1, return30d: 8.1, returnYTD: 41.2 },
-    { ticker: 'NEM', weight: 4.2, return1d: -1.1, return5d: -0.8, return30d: 3.2, returnYTD: 15.6 },
-    { ticker: 'STRF', weight: 3.8, return1d: 0.5, return5d: 1.8, return30d: 4.5, returnYTD: 22.1 },
-    { ticker: 'UNH', weight: 3.5, return1d: 0.7, return5d: 2.3, return30d: 5.9, returnYTD: 18.7 },
-  ]
+  const [performanceData, setPerformanceData] = useState<HoldingPerformance[]>([])
+  const [totals, setTotals] = useState<PortfolioTotals | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Calculate contributions (weight/100 * return)
-  const contributionData = performanceData.map(stock => ({
-    ticker: stock.ticker,
-    contrib1d: (stock.weight / 100) * stock.return1d,
-    contrib5d: (stock.weight / 100) * stock.return5d,
-    contrib30d: (stock.weight / 100) * stock.return30d,
-    contribYTD: (stock.weight / 100) * stock.returnYTD,
-  }))
+  useEffect(() => {
+    async function fetchPerformanceData() {
+      try {
+        setLoading(true)
+        setError(null)
+        
+        console.log('Fetching performance data...')
+        const response = await fetch('/api/performance')
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
+        const json = await response.json()
+        
+        if (!json.success) {
+          throw new Error(json.message || 'Failed to fetch performance data')
+        }
+        
+        console.log('Performance data loaded:', json.data)
+        setPerformanceData(json.data.holdings)
+        setTotals(json.data.totals)
+      } catch (err) {
+        console.error('Error fetching performance data:', err)
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  // Calculate totals
-  const totals = {
-    contrib1d: contributionData.reduce((sum, c) => sum + c.contrib1d, 0),
-    contrib5d: contributionData.reduce((sum, c) => sum + c.contrib5d, 0),
-    contrib30d: contributionData.reduce((sum, c) => sum + c.contrib30d, 0),
-    contribYTD: contributionData.reduce((sum, c) => sum + c.contribYTD, 0),
+    fetchPerformanceData()
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white">
+            Performance Attribution
+          </h1>
+          <p className="text-slate-400 mt-1">
+            Loading performance data...
+          </p>
+        </div>
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-12 text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+          <p className="text-slate-400 mt-4">Calculating returns and contributions...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white">
+            Performance Attribution
+          </h1>
+          <p className="text-slate-400 mt-1">
+            Individual holding performance and portfolio contribution analysis
+          </p>
+        </div>
+        <div className="bg-red-900/20 border border-red-800 rounded-xl p-6">
+          <p className="text-red-400 font-semibold">Error loading performance data</p>
+          <p className="text-red-300 text-sm mt-2">{error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -88,17 +157,17 @@ export default function PerformancePage() {
                   <td className="text-right py-4 px-6 text-slate-300">
                     {stock.weight.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.return1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.return1d > 0 ? '+' : ''}{stock.return1d.toFixed(1)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.return_1d > 0 ? '+' : ''}{stock.return_1d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.return5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.return5d > 0 ? '+' : ''}{stock.return5d.toFixed(1)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.return_5d > 0 ? '+' : ''}{stock.return_5d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.return30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.return30d > 0 ? '+' : ''}{stock.return30d.toFixed(1)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.return_30d > 0 ? '+' : ''}{stock.return_30d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.returnYTD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.returnYTD > 0 ? '+' : ''}{stock.returnYTD.toFixed(1)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.return_ytd > 0 ? '+' : ''}{stock.return_ytd.toFixed(1)}%
                   </td>
                 </tr>
               ))}
@@ -139,7 +208,7 @@ export default function PerformancePage() {
               </tr>
             </thead>
             <tbody>
-              {contributionData.map((stock) => (
+              {performanceData.map((stock) => (
                 <tr
                   key={stock.ticker}
                   className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
@@ -147,38 +216,40 @@ export default function PerformancePage() {
                   <td className="py-4 px-6 font-semibold text-white">
                     {stock.ticker}
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contrib1d > 0 ? '+' : ''}{stock.contrib1d.toFixed(2)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contribution_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.contribution_1d > 0 ? '+' : ''}{stock.contribution_1d.toFixed(2)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contrib5d > 0 ? '+' : ''}{stock.contrib5d.toFixed(2)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contribution_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.contribution_5d > 0 ? '+' : ''}{stock.contribution_5d.toFixed(2)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contrib30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contrib30d > 0 ? '+' : ''}{stock.contrib30d.toFixed(2)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contribution_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.contribution_30d > 0 ? '+' : ''}{stock.contribution_30d.toFixed(2)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium ${stock.contribYTD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contribYTD > 0 ? '+' : ''}{stock.contribYTD.toFixed(2)}%
+                  <td className={`text-right py-4 px-6 font-medium ${stock.contribution_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.contribution_ytd > 0 ? '+' : ''}{stock.contribution_ytd.toFixed(2)}%
                   </td>
                 </tr>
               ))}
               {/* Totals Row */}
-              <tr className="bg-blue-900/30 border-t-2 border-blue-700">
-                <td className="py-4 px-6 font-bold text-white">
-                  TOTAL PORTFOLIO
-                </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contrib1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {totals.contrib1d > 0 ? '+' : ''}{totals.contrib1d.toFixed(2)}%
-                </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contrib5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {totals.contrib5d > 0 ? '+' : ''}{totals.contrib5d.toFixed(2)}%
-                </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contrib30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {totals.contrib30d > 0 ? '+' : ''}{totals.contrib30d.toFixed(2)}%
-                </td>
-                <td className={`text-right py-4 px-6 font-bold ${totals.contribYTD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {totals.contribYTD > 0 ? '+' : ''}{totals.contribYTD.toFixed(2)}%
-                </td>
-              </tr>
+              {totals && (
+                <tr className="bg-blue-900/30 border-t-2 border-blue-700">
+                  <td className="py-4 px-6 font-bold text-white">
+                    TOTAL PORTFOLIO
+                  </td>
+                  <td className={`text-right py-4 px-6 font-bold ${totals.total_contribution_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {totals.total_contribution_1d > 0 ? '+' : ''}{totals.total_contribution_1d.toFixed(2)}%
+                  </td>
+                  <td className={`text-right py-4 px-6 font-bold ${totals.total_contribution_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {totals.total_contribution_5d > 0 ? '+' : ''}{totals.total_contribution_5d.toFixed(2)}%
+                  </td>
+                  <td className={`text-right py-4 px-6 font-bold ${totals.total_contribution_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {totals.total_contribution_30d > 0 ? '+' : ''}{totals.total_contribution_30d.toFixed(2)}%
+                  </td>
+                  <td className={`text-right py-4 px-6 font-bold ${totals.total_contribution_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {totals.total_contribution_ytd > 0 ? '+' : ''}{totals.total_contribution_ytd.toFixed(2)}%
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
