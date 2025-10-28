@@ -4,20 +4,20 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const tabs = [
-  { name: 'Data Upload', path: '/data-upload' },
+  { name: 'CSV Upload', path: '/data-upload' },
+  { name: 'Holdings', path: '/holdings' },
   { name: 'Portfolio', path: '/portfolio' },
   { name: 'Performance', path: '/performance' },
-  { name: 'Risk', path: '/risk' },
+  { name: 'Universe', path: '/universe' },
+  { name: 'Exposure', path: '/exposure' },
+  { name: 'Trading', path: '/trading' },
   { name: 'Sectors', path: '/sectors' },
-  { name: 'Cycle', path: '/cycle' },
+  { name: 'Risk', path: '/risk' },
+  { name: 'Scoring', path: '/scoring' },
   { name: 'Market', path: '/market' },
   { name: 'TIME+', path: '/timeplus' },
   { name: 'Cycles', path: '/cycles' },
   { name: 'Scenarios', path: '/scenarios' },
-  { name: 'Trading', path: '/trading' },
-  { name: 'Exposure', path: '/exposure' },
-  { name: 'Holdings', path: '/holdings' },
-  { name: 'Scoring', path: '/scoring' },
 ]
 
 export default function TabNavigation() {

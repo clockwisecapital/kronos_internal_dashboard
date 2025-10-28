@@ -132,6 +132,7 @@ export async function GET() {
     console.log(`  1-Day:  ${totals.total_contribution_1d.toFixed(2)}%`)
     console.log(`  5-Day:  ${totals.total_contribution_5d.toFixed(2)}%`)
     console.log(`  30-Day: ${totals.total_contribution_30d.toFixed(2)}%`)
+    console.log(`  QTD:    ${totals.total_contribution_qtd.toFixed(2)}%`)
     console.log(`  YTD:    ${totals.total_contribution_ytd.toFixed(2)}%`)
 
     // 9. Sort by weight (largest positions first)

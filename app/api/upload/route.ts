@@ -210,6 +210,46 @@ export async function POST(request: NextRequest) {
       if (totalInserted !== parsedData.rowCount) {
         console.warn(`⚠️ Mismatch: Parsed ${parsedData.rowCount} rows but only saved ${totalInserted}`)
       }
+    } else if (fileType === 'model_portfolios') {
+      // Delete existing model portfolio allocations (CSV represents current state)
+      const { error: deleteError } = await supabase
+        .from('time_plus_allocations')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000') // Delete all records
+
+      if (deleteError) {
+        console.error('Supabase delete error:', deleteError)
+        throw new Error(`Failed to clear existing model allocations: ${deleteError.message}`)
+      }
+
+      console.log('Cleared existing model portfolio allocations')
+
+      // Transform records to match time_plus_allocations table structure
+      const allocationRecords = parsedData.records.map((record: any) => ({
+        model_name: record.model_name,
+        ticker: record.ticker,
+        weight_pct: record.target_weight,
+        asset_class: record.asset_class,
+        sector: record.sector || null,
+        allocation_date: new Date().toISOString().split('T')[0] // Today's date
+      }))
+
+      // Insert new allocations
+      const { error: insertError, data: insertedData } = await supabase
+        .from('time_plus_allocations')
+        .insert(allocationRecords)
+        .select()
+
+      if (insertError) {
+        console.error('Supabase insert error:', insertError)
+        throw new Error(`Failed to save model allocations: ${insertError.message}`)
+      }
+
+      console.log(`Saved ${insertedData?.length || parsedData.rowCount} model portfolio allocations to database`)
+      
+      if (insertedData && insertedData.length !== parsedData.rowCount) {
+        console.warn(`⚠️ Mismatch: Parsed ${parsedData.rowCount} rows but only saved ${insertedData.length}`)
+      }
     }
     // Add other file types as tables are created
     // else if (fileType === 'benchmarks') { ... }

@@ -243,6 +243,71 @@ export async function fetchPriceEndOfLastMonth(ticker: string): Promise<number |
 }
 
 /**
+ * Get price at end of last quarter
+ * Quarters end on: Mar 31 (Q1), Jun 30 (Q2), Sep 30 (Q3), Dec 31 (Q4)
+ * Handles weekends by using last Friday if quarter-end falls on weekend
+ */
+export async function fetchPriceEndOfLastQuarter(ticker: string): Promise<number | null> {
+  try {
+    const now = new Date()
+    const currentMonth = now.getMonth() // 0-11
+    const currentYear = now.getFullYear()
+    
+    // Determine end of last quarter
+    let lastQuarterEndDate: Date
+    
+    if (currentMonth < 3) {
+      // Currently in Q1 → Last quarter was Q4 of previous year (Dec 31)
+      lastQuarterEndDate = new Date(currentYear - 1, 11, 31)
+    } else if (currentMonth < 6) {
+      // Currently in Q2 → Last quarter was Q1 (Mar 31)
+      lastQuarterEndDate = new Date(currentYear, 2, 31)
+    } else if (currentMonth < 9) {
+      // Currently in Q3 → Last quarter was Q2 (Jun 30)
+      lastQuarterEndDate = new Date(currentYear, 5, 30)
+    } else {
+      // Currently in Q4 → Last quarter was Q3 (Sep 30)
+      lastQuarterEndDate = new Date(currentYear, 8, 30)
+    }
+    
+    // If last day is weekend, go back to Friday
+    const dayOfWeek = lastQuarterEndDate.getDay()
+    if (dayOfWeek === 0) { // Sunday
+      lastQuarterEndDate.setDate(lastQuarterEndDate.getDate() - 2)
+    } else if (dayOfWeek === 6) { // Saturday
+      lastQuarterEndDate.setDate(lastQuarterEndDate.getDate() - 1)
+    }
+    
+    const historicalData = await fetchHistoricalData(ticker, '6mo')
+    
+    if (!historicalData || !historicalData.timestamp || !historicalData.indicators?.quote?.[0]?.close) {
+      return null
+    }
+    
+    const timestamps = historicalData.timestamp as number[]
+    const closes = historicalData.indicators.quote[0].close as number[]
+    
+    // Find closest timestamp to target date
+    const targetTimestamp = Math.floor(lastQuarterEndDate.getTime() / 1000)
+    let closestIndex = 0
+    let minDiff = Math.abs(timestamps[0] - targetTimestamp)
+    
+    for (let i = 1; i < timestamps.length; i++) {
+      const diff = Math.abs(timestamps[i] - targetTimestamp)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestIndex = i
+      }
+    }
+    
+    return closes[closestIndex] || null
+  } catch (error) {
+    console.error(`Error fetching end of quarter price for ${ticker}:`, error)
+    return null
+  }
+}
+
+/**
  * Get price at end of last year (December 31st)
  * Handles weekends by using last Friday if year-end falls on weekend
  */
