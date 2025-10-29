@@ -18,12 +18,44 @@ interface SnapshotStats {
   latest_nav: number
 }
 
+interface SecurityDownsideRow {
+  ticker: string
+  weight: number
+  ma9d: number | null
+  ma50d: number | null
+  ma100d: number | null
+  ma200d: number | null
+}
+
+interface VIXData {
+  level: number
+  dailyChange: number
+  changePercent: number
+  classification: string
+  color: string
+  previousClose: number
+}
+
+interface MarketDownsideRow {
+  index: string
+  ma9d: number | null
+  ma50d: number | null
+  ma100d: number | null
+  ma200d: number | null
+}
+
 export default function RiskPage() {
   const [riskMetrics, setRiskMetrics] = useState<RiskMetrics | null>(null)
   const [loadingMetrics, setLoadingMetrics] = useState(true)
   const [snapshotStats, setSnapshotStats] = useState<SnapshotStats | null>(null)
   const [capturingSnapshot, setCapturingSnapshot] = useState(false)
   const [snapshotMessage, setSnapshotMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null)
+  const [securityDownside, setSecurityDownside] = useState<SecurityDownsideRow[]>([])
+  const [loadingSecurityDownside, setLoadingSecurityDownside] = useState(true)
+  const [vixData, setVixData] = useState<VIXData | null>(null)
+  const [loadingVix, setLoadingVix] = useState(true)
+  const [marketDownside, setMarketDownside] = useState<MarketDownsideRow[]>([])
+  const [loadingMarketDownside, setLoadingMarketDownside] = useState(true)
   const [scoreInputs, setScoreInputs] = useState({
     ticker: '',
     // Valuation
@@ -72,6 +104,48 @@ export default function RiskPage() {
         const statsJson = await statsResponse.json()
         if (statsJson.success && statsJson.data) {
           setSnapshotStats(statsJson.data)
+        }
+
+        // Fetch VIX data
+        setLoadingVix(true)
+        try {
+          const vixResponse = await fetch('/api/risk/vix')
+          const vixJson = await vixResponse.json()
+          if (vixJson.success && vixJson.data) {
+            setVixData(vixJson.data)
+          }
+        } catch (error) {
+          console.error('Error fetching VIX data:', error)
+        } finally {
+          setLoadingVix(false)
+        }
+
+        // Fetch Market Downside data
+        setLoadingMarketDownside(true)
+        try {
+          const marketResponse = await fetch('/api/risk/market-downside')
+          const marketJson = await marketResponse.json()
+          if (marketJson.success && marketJson.data) {
+            setMarketDownside(marketJson.data)
+          }
+        } catch (error) {
+          console.error('Error fetching market downside:', error)
+        } finally {
+          setLoadingMarketDownside(false)
+        }
+
+        // Fetch security downside data
+        setLoadingSecurityDownside(true)
+        try {
+          const securityResponse = await fetch('/api/risk/security-downside')
+          const securityJson = await securityResponse.json()
+          if (securityJson.success && securityJson.data) {
+            setSecurityDownside(securityJson.data)
+          }
+        } catch (error) {
+          console.error('Error fetching security downside:', error)
+        } finally {
+          setLoadingSecurityDownside(false)
         }
       } catch (error) {
         console.error('Error fetching data:', error)
@@ -133,21 +207,6 @@ export default function RiskPage() {
       setCapturingSnapshot(false)
     }
   }
-
-  const vix = {
-    level: 18.42,
-    change: -5.2,
-    status: 'LOW VOL',
-    statusColor: 'text-green-600 dark:text-green-400',
-  }
-
-  const marketDownside = [
-    { index: 'SPY', ma9d: -2.1, ma50d: -1.2, ma100d: 0.8, ma200d: 3.2 },
-    { index: 'QQQ', ma9d: 1.2, ma50d: 2.8, ma100d: 5.1, ma200d: 8.9 },
-    { index: 'DIA', ma9d: -3.5, ma50d: -2.1, ma100d: -0.5, ma200d: 1.8 },
-    { index: 'IWM', ma9d: -4.2, ma50d: -3.8, ma100d: -2.1, ma200d: 0.2 },
-    { index: 'SMH', ma9d: 3.8, ma50d: 6.2, ma100d: 11.5, ma200d: 18.7 },
-  ]
 
   return (
     <div className="p-6 space-y-6">
@@ -385,19 +444,36 @@ export default function RiskPage() {
             <p className="text-sm font-medium text-slate-400 mb-4">
               VIX Fear Index
             </p>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-4xl font-bold text-white">
-                  {vix.level}
-                </p>
-                <p className={`text-sm font-medium mt-1 ${vix.change >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {vix.change > 0 ? '+' : ''}{vix.change.toFixed(1)}%
-                </p>
+            {loadingVix ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                <span className="ml-2 text-slate-400 text-sm">Loading VIX data...</span>
               </div>
-              <div className={`px-4 py-2 rounded-lg font-semibold ${vix.statusColor} bg-green-100 dark:bg-green-900/20`}>
-                {vix.status}
+            ) : vixData ? (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-4xl font-bold text-white">
+                    {vixData.level.toFixed(2)}
+                  </p>
+                  <p className={`text-sm font-medium mt-1 ${vixData.changePercent >= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {vixData.changePercent > 0 ? '+' : ''}{vixData.changePercent.toFixed(1)}%
+                  </p>
+                </div>
+                <div className={`px-4 py-2 rounded-lg font-semibold border ${
+                  vixData.color === 'green' 
+                    ? 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20 border-green-600' 
+                    : vixData.color === 'yellow'
+                    ? 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/20 border-yellow-600'
+                    : 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/20 border-red-600'
+                }`}>
+                  {vixData.classification.toUpperCase().replace(' VOLATILITY', ' VOL')}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-4 text-slate-400">
+                Failed to load VIX data
+              </div>
+            )}
           </div>
 
           {/* Market Downside Table */}
@@ -410,55 +486,169 @@ export default function RiskPage() {
                 Distance from moving averages
               </p>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-700 border-b border-slate-600">
-                    <th className="text-left py-3 px-4 font-semibold text-white">
-                      Index
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-white">
-                      9D MA
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-white">
-                      50D MA
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-white">
-                      100D MA
-                    </th>
-                    <th className="text-right py-3 px-4 font-semibold text-white">
-                      200D MA
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {marketDownside.map((row) => (
-                    <tr
-                      key={row.index}
-                      className="border-b border-slate-700"
-                    >
-                      <td className="py-3 px-4 font-medium text-white">
-                        {row.index}
-                      </td>
-                      <td className={`text-right py-3 px-4 ${row.ma9d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {row.ma9d > 0 ? '+' : ''}{row.ma9d.toFixed(1)}%
-                      </td>
-                      <td className={`text-right py-3 px-4 ${row.ma50d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {row.ma50d > 0 ? '+' : ''}{row.ma50d.toFixed(1)}%
-                      </td>
-                      <td className={`text-right py-3 px-4 ${row.ma100d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {row.ma100d > 0 ? '+' : ''}{row.ma100d.toFixed(1)}%
-                      </td>
-                      <td className={`text-right py-3 px-4 ${row.ma200d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {row.ma200d > 0 ? '+' : ''}{row.ma200d.toFixed(1)}%
-                      </td>
+            
+            {loadingMarketDownside ? (
+              <div className="p-8 text-center">
+                <div className="inline-block h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                <p className="text-slate-400 text-sm">Loading market data...</p>
+              </div>
+            ) : marketDownside.length === 0 ? (
+              <div className="p-8 text-center text-slate-400">
+                No market data available
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-700 border-b border-slate-600">
+                      <th className="text-left py-3 px-4 font-semibold text-white">
+                        Index
+                      </th>
+                      <th className="text-right py-3 px-4 font-semibold text-white">
+                        9D MA
+                      </th>
+                      <th className="text-right py-3 px-4 font-semibold text-white">
+                        50D MA
+                      </th>
+                      <th className="text-right py-3 px-4 font-semibold text-white">
+                        100D MA
+                      </th>
+                      <th className="text-right py-3 px-4 font-semibold text-white">
+                        200D MA
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {marketDownside.map((row) => (
+                      <tr
+                        key={row.index}
+                        className="border-b border-slate-700"
+                      >
+                        <td className="py-3 px-4 font-medium text-white">
+                          {row.index}
+                        </td>
+                        <td className={`text-right py-3 px-4 ${
+                          row.ma9d === null ? 'text-slate-500' :
+                          row.ma9d >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {row.ma9d === null ? 'N/A' : `${row.ma9d > 0 ? '+' : ''}${row.ma9d.toFixed(1)}%`}
+                        </td>
+                        <td className={`text-right py-3 px-4 ${
+                          row.ma50d === null ? 'text-slate-500' :
+                          row.ma50d >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {row.ma50d === null ? 'N/A' : `${row.ma50d > 0 ? '+' : ''}${row.ma50d.toFixed(1)}%`}
+                        </td>
+                        <td className={`text-right py-3 px-4 ${
+                          row.ma100d === null ? 'text-slate-500' :
+                          row.ma100d >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {row.ma100d === null ? 'N/A' : `${row.ma100d > 0 ? '+' : ''}${row.ma100d.toFixed(1)}%`}
+                        </td>
+                        <td className={`text-right py-3 px-4 ${
+                          row.ma200d === null ? 'text-slate-500' :
+                          row.ma200d >= 0 ? 'text-green-400' : 'text-red-400'
+                        }`}>
+                          {row.ma200d === null ? 'N/A' : `${row.ma200d > 0 ? '+' : ''}${row.ma200d.toFixed(1)}%`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
+      </div>
+
+      {/* Security Downside Table */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
+        <div className="p-6 border-b border-slate-700">
+          <p className="text-sm font-semibold text-white">
+            Security Downside
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            Holdings distance from moving averages (sorted by weight)
+          </p>
+        </div>
+        
+        {loadingSecurityDownside ? (
+          <div className="p-8 text-center">
+            <div className="inline-block h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <p className="text-slate-400 text-sm">Calculating moving averages...</p>
+            <p className="text-slate-500 text-xs mt-1">This may take a minute for large portfolios</p>
+          </div>
+        ) : securityDownside.length === 0 ? (
+          <div className="p-8 text-center text-slate-400">
+            No security data available
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-700 border-b border-slate-600">
+                  <th className="text-left py-3 px-4 font-semibold text-white">
+                    Ticker
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold text-white">
+                    Weight
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold text-white">
+                    9D MA
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold text-white">
+                    50D MA
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold text-white">
+                    100D MA
+                  </th>
+                  <th className="text-right py-3 px-4 font-semibold text-white">
+                    200D MA
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {securityDownside.map((row) => (
+                  <tr
+                    key={row.ticker}
+                    className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
+                  >
+                    <td className="py-3 px-4 font-medium text-white">
+                      {row.ticker}
+                    </td>
+                    <td className="text-right py-3 px-4 text-slate-300">
+                      {row.weight.toFixed(1)}%
+                    </td>
+                    <td className={`text-right py-3 px-4 ${
+                      row.ma9d === null ? 'text-slate-500' :
+                      row.ma9d >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {row.ma9d === null ? 'N/A' : `${row.ma9d > 0 ? '+' : ''}${row.ma9d.toFixed(1)}%`}
+                    </td>
+                    <td className={`text-right py-3 px-4 ${
+                      row.ma50d === null ? 'text-slate-500' :
+                      row.ma50d >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {row.ma50d === null ? 'N/A' : `${row.ma50d > 0 ? '+' : ''}${row.ma50d.toFixed(1)}%`}
+                    </td>
+                    <td className={`text-right py-3 px-4 ${
+                      row.ma100d === null ? 'text-slate-500' :
+                      row.ma100d >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {row.ma100d === null ? 'N/A' : `${row.ma100d > 0 ? '+' : ''}${row.ma100d.toFixed(1)}%`}
+                    </td>
+                    <td className={`text-right py-3 px-4 ${
+                      row.ma200d === null ? 'text-slate-500' :
+                      row.ma200d >= 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {row.ma200d === null ? 'N/A' : `${row.ma200d > 0 ? '+' : ''}${row.ma200d.toFixed(1)}%`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Stock Scoring Calculator */}
