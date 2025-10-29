@@ -69,9 +69,9 @@ export async function GET() {
       console.log(`De-duplicated: ${holdings.length} → ${holdingsToUse.length} holdings`)
     }
 
-    // 2. Get current prices for all holdings (filter out invalid tickers)
+    // 2. Get current prices and previous closes for all holdings (filter out invalid tickers)
     console.log('Fetching current prices for TIME portfolio...')
-    const pricesMap = new Map<string, number>()
+    const pricesMap = new Map<string, { current: number; previousClose: number }>()
     
     // Filter valid tickers using shared utility
     const allTickers = holdingsToUse.map(h => h.stock_ticker)
@@ -83,25 +83,49 @@ export async function GET() {
     for (const holding of validHoldings) {
       const quoteData = await fetchQuote(holding.stock_ticker)
       if (quoteData && quoteData.currentPrice > 0) {
-        pricesMap.set(holding.stock_ticker, quoteData.currentPrice)
+        pricesMap.set(holding.stock_ticker, {
+          current: quoteData.currentPrice,
+          previousClose: quoteData.previousClose
+        })
       }
     }
 
     // 3. Calculate NAV: Mirror Holdings tab logic exactly (line 183-185, then 228)
     const holdingsWithCalcs = holdingsToUse.map(h => {
-      const realtimePrice = pricesMap.get(h.stock_ticker)
+      const priceData = pricesMap.get(h.stock_ticker)
+      const realtimePrice = priceData?.current
+      const calculatedValue = realtimePrice ? (realtimePrice * h.shares) : 
+                              h.current_price ? (h.current_price * h.shares) : 
+                              h.market_value
+      
+      // Disabled: Too verbose
+      // const priceSource = realtimePrice ? 'Yahoo' : h.current_price ? 'CSV-current' : 'CSV-market'
+      // console.log(`[${h.stock_ticker}] Price: ${realtimePrice || h.current_price || 'N/A'} (${priceSource}) × ${h.shares} shares = $${calculatedValue.toFixed(2)}`)
+      
       return {
         ...h,
-        calculated_market_value: realtimePrice ? (realtimePrice * h.shares) : 
-                                 h.current_price ? (h.current_price * h.shares) : 
-                                 h.market_value
+        calculated_market_value: calculatedValue
       }
     })
     
     // NAV = Sum of calculated_market_value (same as Holdings totalValue)
     const nav = holdingsWithCalcs.reduce((sum, h) => sum + h.calculated_market_value, 0)
     
-    console.log(`NAV: $${nav.toLocaleString()} (from ${holdingsWithCalcs.length} holdings)`)
+    // Create detailed breakdown for debugging
+    const tickersWithYahoo = holdingsWithCalcs.filter(h => pricesMap.has(h.stock_ticker))
+    const tickersWithoutYahoo = holdingsWithCalcs.filter(h => !pricesMap.has(h.stock_ticker))
+    
+    console.log(`\n=== PORTFOLIO API - NAV CALCULATION SUMMARY ===`)
+    console.log(`Date: ${latestDate}`)
+    console.log(`Total Holdings: ${holdingsWithCalcs.length}`)
+    console.log(`NAV: $${nav.toFixed(2)}`)
+    console.log(`Holdings with Yahoo prices: ${tickersWithYahoo.length}`)
+    console.log(`Holdings using CSV prices: ${tickersWithoutYahoo.length}`)
+    console.log(`\nTickers list: ${holdingsWithCalcs.map(h => h.stock_ticker).sort().join(', ')}`)
+    if (tickersWithoutYahoo.length > 0) {
+      console.log(`Tickers WITHOUT Yahoo prices: ${tickersWithoutYahoo.map(h => h.stock_ticker).join(', ')}`)
+    }
+    console.log(`==============================================\n`)
 
     // 4. Calculate TIME Portfolio Performance
     const timePerformance = await calculateTimePortfolioPerformance(holdingsToUse, pricesMap)
@@ -156,14 +180,14 @@ export async function GET() {
 
 /**
  * Calculate TIME Portfolio Performance
- * Daily: Current Price / Close Price - 1
- * WTD: Current Price / Price 7 days ago - 1
+ * Daily: Current Price / Previous Close (from Yahoo) - 1
+ * Week: Current Price / Price 7 days ago - 1
  * MTD: Current Price / Price at end of last month - 1
  * YTD: Current Price / Price at end of last year - 1
  */
 async function calculateTimePortfolioPerformance(
-  holdings: { stock_ticker: string; market_value: number; close_price: number; shares: number }[],
-  pricesMap: Map<string, number>
+  holdings: { stock_ticker: string; market_value: number; shares: number }[],
+  pricesMap: Map<string, { current: number; previousClose: number }>
 ): Promise<PerformanceMetrics> {
   const totalMarketValue = holdings.reduce((sum, h) => sum + h.market_value, 0)
   
@@ -174,35 +198,47 @@ async function calculateTimePortfolioPerformance(
   let validHoldings = 0
 
   for (const holding of holdings) {
-    const currentPrice = pricesMap.get(holding.stock_ticker)
-    if (!currentPrice || currentPrice === 0) continue
+    const priceData = pricesMap.get(holding.stock_ticker)
+    if (!priceData || priceData.current === 0) continue
 
+    const currentPrice = priceData.current
+    const previousClose = priceData.previousClose
     const weight = holding.market_value / totalMarketValue
     validHoldings++
 
-    // Daily Return: current_price / close_price - 1
-    const holdingDailyReturn = (currentPrice / holding.close_price) - 1
+    // Daily Return: current_price / previous_close (from Yahoo Finance) - 1
+    console.log(`[${holding.stock_ticker}] Daily: current=${currentPrice.toFixed(2)}, prev_close=${previousClose.toFixed(2)} (Yahoo)`)
+    const holdingDailyReturn = (currentPrice / previousClose) - 1
     dailyReturn += holdingDailyReturn * weight
 
-    // WTD Return: current_price / price_7_days_ago - 1
+    // Week Return: current_price / price_7_days_ago - 1
     const price7DaysAgo = await fetchPriceNDaysAgo(holding.stock_ticker, 7)
     if (price7DaysAgo) {
+      console.log(`[${holding.stock_ticker}] Week: current=${currentPrice.toFixed(2)}, 7d_ago=${price7DaysAgo.toFixed(2)}`)
       const holdingWtdReturn = (currentPrice / price7DaysAgo) - 1
       wtdReturn += holdingWtdReturn * weight
+    } else {
+      console.warn(`[${holding.stock_ticker}] Week: No price 7 days ago`)
     }
 
     // MTD Return: current_price / price_end_of_last_month - 1
     const priceEndOfLastMonth = await fetchPriceEndOfLastMonth(holding.stock_ticker)
     if (priceEndOfLastMonth) {
+      console.log(`[${holding.stock_ticker}] MTD: current=${currentPrice.toFixed(2)}, month_end=${priceEndOfLastMonth.toFixed(2)}`)
       const holdingMtdReturn = (currentPrice / priceEndOfLastMonth) - 1
       mtdReturn += holdingMtdReturn * weight
+    } else {
+      console.warn(`[${holding.stock_ticker}] MTD: No price at end of last month`)
     }
 
     // YTD Return: current_price / price_end_of_last_year - 1
     const priceEndOfLastYear = await fetchPriceEndOfLastYear(holding.stock_ticker)
     if (priceEndOfLastYear) {
+      console.log(`[${holding.stock_ticker}] YTD: current=${currentPrice.toFixed(2)}, year_end=${priceEndOfLastYear.toFixed(2)}`)
       const holdingYtdReturn = (currentPrice / priceEndOfLastYear) - 1
       ytdReturn += holdingYtdReturn * weight
+    } else {
+      console.warn(`[${holding.stock_ticker}] YTD: No price at end of last year`)
     }
   }
 
@@ -230,9 +266,11 @@ async function calculateBenchmarkPerformance(ticker: string): Promise<Performanc
     }
 
     const currentPrice = currentQuote.currentPrice
+    const previousClose = currentQuote.previousClose
 
-    // Daily Return: Using the change from current quote
-    const dailyReturn = currentQuote.changePercent
+    // Daily Return: Calculate from current price and previous close (same as TIME portfolio)
+    const dailyReturn = previousClose > 0 ? ((currentPrice / previousClose) - 1) * 100 : 0
+    console.log(`[${ticker}] Benchmark Daily: current=${currentPrice.toFixed(2)}, prev_close=${previousClose.toFixed(2)}, return=${dailyReturn.toFixed(2)}%`)
 
     // WTD Return
     const price7DaysAgo = await fetchPriceNDaysAgo(ticker, 7)
@@ -275,23 +313,19 @@ async function calculateKeyMetrics(
   const totalCash = cashHoldings.reduce((sum, h) => sum + h.market_value, 0)
   const cashPercentage = (totalCash / totalMarketValue) * 100
 
-  // Placeholders for beta calculations (will be implemented later)
-  const clockwiseBeta = '0.91x'
-  const betaReport3Year = '0.79x'
-  const effectiveHedge = '23.9%'
-  
-  // Crypto Exposure: Look for crypto-related tickers
-  const cryptoTickers = holdings.filter(h => 
-    ['BTC', 'ETH', 'COIN', 'MSTR'].some(crypto => h.stock_ticker.includes(crypto))
-  )
-  const cryptoValue = cryptoTickers.reduce((sum, h) => sum + h.market_value, 0)
-  const cryptoPercentage = (cryptoValue / totalMarketValue) * 100
+  // Placeholders for beta calculations (to be implemented with Universe tab data)
+  const trueBeta = 'TBD'
+  const beta1Year = 'TBD'
+  const beta3Year = 'TBD'
+  const notionalHedge = 'TBD'
+  const effectiveHedge = 'TBD'
 
   return [
     { label: 'Total Cash', value: `${cashPercentage.toFixed(2)}%` },
-    { label: 'Clockwise Beta', value: clockwiseBeta },
-    { label: 'Beta Report 3-Yr', value: betaReport3Year },
-    { label: 'Effective Hedge', value: effectiveHedge },
-    { label: 'Crypto Exposure', value: `${cryptoPercentage.toFixed(1)}%` }
+    { label: 'True Beta', value: trueBeta },
+    { label: '1-Year Beta', value: beta1Year },
+    { label: '3-Year Beta', value: beta3Year },
+    { label: 'Notional Hedge', value: notionalHedge },
+    { label: 'Effective Hedge', value: effectiveHedge }
   ]
 }

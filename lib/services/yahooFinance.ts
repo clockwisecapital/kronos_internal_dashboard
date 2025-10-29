@@ -16,6 +16,7 @@ export interface StockQuote {
 export interface PriceData {
   ticker: string
   currentPrice: number
+  previousClose: number
   currency: string
   change: number
   changePercent: number
@@ -54,6 +55,7 @@ export async function fetchQuote(ticker: string): Promise<PriceData | null> {
     return {
       ticker: ticker,
       currentPrice: meta.regularMarketPrice,
+      previousClose: meta.previousClose || meta.chartPreviousClose || 0,
       currency: meta.currency || 'USD',
       change: meta.regularMarketPrice - meta.previousClose || 0,
       changePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose * 100) || 0,
@@ -65,6 +67,7 @@ export async function fetchQuote(ticker: string): Promise<PriceData | null> {
     return {
       ticker,
       currentPrice: 0,
+      previousClose: 0,
       currency: 'USD',
       change: 0,
       changePercent: 0,
@@ -186,8 +189,18 @@ export async function fetchPriceNDaysAgo(ticker: string, daysAgo: number): Promi
     const timestamps = historicalData.timestamp as number[]
     const closes = historicalData.indicators.quote[0].close as number[]
     
-    // Find the index that's approximately N trading days ago
-    const targetIndex = Math.max(0, closes.length - daysAgo - 1)
+    // Count backwards exactly N trading days from the most recent day
+    // Start from the last valid price (not today's intraday price)
+    let tradingDaysBack = 0
+    let targetIndex = closes.length - 1
+    
+    // Find the index that's exactly N trading days ago
+    for (let i = closes.length - 1; i >= 0 && tradingDaysBack < daysAgo; i--) {
+      if (closes[i] !== null && closes[i] !== undefined) {
+        tradingDaysBack++
+        targetIndex = i
+      }
+    }
     
     return closes[targetIndex] || null
   } catch (error) {

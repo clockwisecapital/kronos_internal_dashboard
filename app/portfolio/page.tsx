@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { setupSynchronizedRefresh } from '@/lib/utils/refreshSync'
 
 interface PerformanceData {
   name: string
@@ -31,15 +32,30 @@ export default function PortfolioPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
+  // Initial fetch and synchronized auto-refresh
   useEffect(() => {
-    fetchPortfolioData()
+    fetchPortfolioData(true) // Initial load
+    
+    // Setup synchronized refresh (fires at top of each minute)
+    const cleanup = setupSynchronizedRefresh(() => {
+      console.log('Auto-refreshing portfolio data in background (synchronized)...')
+      fetchPortfolioData(false) // Background refresh
+    }, 60000) // 60 seconds
+    
+    return cleanup
   }, [])
 
-  const fetchPortfolioData = async () => {
+  const fetchPortfolioData = async (isInitialLoad: boolean = false) => {
     try {
-      setLoading(true)
-      setPortfolioData(null) // Clear existing data before fetching
+      // Only show full loading state on initial load
+      if (isInitialLoad) {
+        setLoading(true)
+        setPortfolioData(null)
+      } else {
+        setIsRefreshing(true)
+      }
       
       // Add cache-busting timestamp
       const response = await fetch(`/api/portfolio?t=${Date.now()}`, {
@@ -63,9 +79,16 @@ export default function PortfolioPage() {
       }
     } catch (err) {
       console.error('Error fetching portfolio:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load portfolio data')
+      // Only set error on initial load, ignore errors during background refresh
+      if (isInitialLoad) {
+        setError(err instanceof Error ? err.message : 'Failed to load portfolio data')
+      }
     } finally {
-      setLoading(false)
+      if (isInitialLoad) {
+        setLoading(false)
+      } else {
+        setIsRefreshing(false)
+      }
     }
   }
 
@@ -94,7 +117,7 @@ export default function PortfolioPage() {
             {error || 'No portfolio data available'}
           </p>
           <button
-            onClick={fetchPortfolioData}
+            onClick={() => fetchPortfolioData(true)}
             className="inline-flex items-center px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
           >
             Retry
@@ -118,16 +141,30 @@ export default function PortfolioPage() {
             Current portfolio holdings and performance metrics
           </p>
         </div>
-        <button
-          onClick={fetchPortfolioData}
-          disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh Data
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Subtle refresh indicator */}
+          {isRefreshing && (
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <div className="h-2 w-2 bg-blue-500 rounded-full animate-pulse"></div>
+              <span>Updating...</span>
+            </div>
+          )}
+          {!isRefreshing && (
+            <span className="text-sm text-slate-400">
+              Auto-refresh synced (top of each minute)
+            </span>
+          )}
+          <button
+            onClick={() => fetchPortfolioData(false)}
+            disabled={loading || isRefreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors shadow-lg shadow-blue-500/20"
+          >
+            <svg className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isRefreshing ? 'Refreshing...' : 'Refresh Now'}
+          </button>
+        </div>
       </div>
 
       {/* Top Section: NAV + Performance */}
@@ -139,7 +176,7 @@ export default function PortfolioPage() {
               Net Asset Value
             </p>
             <p className="text-4xl font-bold text-white">
-              ${nav.toLocaleString()}
+              ${nav.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           </div>
         </div>
@@ -160,7 +197,7 @@ export default function PortfolioPage() {
                     Daily
                   </th>
                   <th className="text-right py-3 px-4 font-medium text-white">
-                    WTD
+                    Week
                   </th>
                   <th className="text-right py-3 px-4 font-medium text-white">
                     MTD
@@ -202,7 +239,7 @@ export default function PortfolioPage() {
       </div>
 
       {/* Key Metrics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {keyMetrics.map((metric) => (
           <div
             key={metric.label}
