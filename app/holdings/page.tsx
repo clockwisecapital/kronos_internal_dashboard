@@ -20,18 +20,37 @@ interface Holding {
   current_price?: number
   previous_close?: number  // Previous close from Yahoo Finance
   pct_change?: number
-  avg_index_weight?: number
   index_ratio?: number
   qqq_weight?: number
   sp_weight?: number
   earnings_date?: string
   earnings_time?: string
+  // New fields from factset_data
+  beta_1y?: number
+  beta_3y?: number
+  true_beta?: number  // TBD - placeholder
+  // New fields from tgt_prices
+  target_price?: number
+  // Placeholder fields
+  net_weight?: number  // TBD
+  score?: number  // TBD
+  target_weight?: number  // TBD
 }
 
 interface HoldingWithCalculations extends Holding {
   calculated_weight: number  // Formula: (Market Value / sum of all Market Value) * 100
   calculated_market_value: number  // Formula: current_price * shares (use close_price if current_price null)
   calculated_pct_change: number  // Formula: (current_price/close_price - 1) * 100
+  basis_point_contribution: number  // Formula: (weight × daily % change) in basis points
+  upside?: number  // Formula: (target_price / current_price - 1) * 100
+}
+
+interface BenchmarkReturn {
+  ticker: string
+  name: string
+  currentPrice: number
+  previousClose: number
+  dailyReturn: number
 }
 
 export default function HoldingsPage() {
@@ -41,6 +60,8 @@ export default function HoldingsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [sortColumn, setSortColumn] = useState<keyof HoldingWithCalculations>('stock_ticker')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [portfolioReturn, setPortfolioReturn] = useState<number>(0)
+  const [benchmarkReturns, setBenchmarkReturns] = useState<BenchmarkReturn[]>([])
 
   // Initial fetch and synchronized auto-refresh
   useEffect(() => {
@@ -153,6 +174,140 @@ export default function HoldingsPage() {
         weightingsData?.map(w => [w.ticker, { spy: w.spy, qqq: w.qqq }]) || []
       )
       
+      // Fetch factset_data for beta values
+      const { data: factsetData, error: factsetError } = await supabase
+        .from('factset_data')
+        .select('"TICKER", "BETA 1Y", "BETA 3Y", "Next Earnings Date"')
+      
+      if (factsetError) {
+        console.warn('Failed to fetch factset data:', factsetError.message)
+      }
+      
+      // Create lookup map for factset data
+      const factsetMap = new Map(
+        factsetData?.map(f => [f.TICKER, { 
+          beta_1y: f['BETA 1Y'] ? parseFloat(f['BETA 1Y']) : null,
+          beta_3y: f['BETA 3Y'] ? parseFloat(f['BETA 3Y']) : null,
+          earnings_date: f['Next Earnings Date'] || null
+        }]) || []
+      )
+      
+      // Fetch target prices from tgt_prices table
+      // Fetch ALL records using pagination to bypass default limits
+      console.log('=== FETCHING TARGET PRICES ===')
+      let tgtPricesData: any[] = []
+      let tgtPricesError = null
+      let start = 0
+      const batchSize = 1000
+      let hasMore = true
+      
+      // Fetch in batches until we get all records
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('tgt_prices')
+          .select('*')
+          .range(start, start + batchSize - 1)
+        
+        if (error) {
+          tgtPricesError = error
+          break
+        }
+        
+        if (data && data.length > 0) {
+          tgtPricesData.push(...data)
+          console.log(`Fetched batch: ${start} to ${start + data.length - 1}`)
+          
+          // If we got less than batchSize, we've reached the end
+          if (data.length < batchSize) {
+            hasMore = false
+          } else {
+            start += batchSize
+          }
+        } else {
+          hasMore = false
+        }
+      }
+      
+      console.log('tgt_prices query result:', { 
+        hasData: !!tgtPricesData, 
+        length: tgtPricesData?.length,
+        error: tgtPricesError?.message 
+      })
+      
+      if (tgtPricesError) {
+        console.error('Failed to fetch target prices:', tgtPricesError)
+      }
+      
+      // Debug: Log first record to see actual column names
+      if (tgtPricesData && tgtPricesData.length > 0) {
+        console.log('First tgt_prices record:', tgtPricesData[0])
+        console.log('Column names in tgt_prices:', Object.keys(tgtPricesData[0]))
+      }
+      
+      // Create lookup map for target prices
+      const tgtPricesMap = new Map<string, number | null>()
+      if (tgtPricesData && tgtPricesData.length > 0) {
+        console.log(`Target prices: Processing ${tgtPricesData.length} records`)
+        tgtPricesData.forEach((t, idx) => {
+          // Get ticker - try all possible column name variations
+          let ticker = t['Ticker'] || t['ticker'] || t['TICKER']
+          // Get price - try all possible column name variations
+          const priceStr = t['Consensus Tgt Price'] || t['consensus_tgt_price'] || t['Consensus_Tgt_Price']
+          
+          // Debug first 5 records
+          if (idx < 5) {
+            console.log(`Record ${idx}: ticker="${ticker}", priceStr="${priceStr}"`)
+          }
+          
+          if (ticker) {
+            // Normalize ticker: remove asterisk prefix, trim whitespace, uppercase
+            ticker = ticker.replace(/^\*/, '').trim().toUpperCase()
+            
+            // Parse price, handling #N/A and other non-numeric values
+            let price: number | null = null
+            if (priceStr && priceStr !== '#N/A' && priceStr !== 'N/A' && priceStr !== '') {
+              const parsed = parseFloat(String(priceStr).replace(/[^0-9.-]/g, ''))
+              if (!isNaN(parsed)) {
+                price = parsed
+              }
+            }
+            
+            tgtPricesMap.set(ticker, price)
+          }
+        })
+        console.log(`Target prices map: ${tgtPricesMap.size} tickers mapped`)
+        // Log some sample entries
+        const sampleTickers = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META']
+        sampleTickers.forEach(t => {
+          const upperT = t.toUpperCase()
+          console.log(`tgtPricesMap.get("${upperT}"):`, tgtPricesMap.get(upperT))
+        })
+        // Check if AAPL exists with any variation
+        console.log('Checking for AAPL variations:')
+        for (const [key, value] of tgtPricesMap.entries()) {
+          if (key.includes('AAPL') || key.includes('aapl') || key.includes('Aapl')) {
+            console.log(`Found AAPL variant: "${key}" = ${value}`)
+          }
+        }
+        // Log all tickers in the map (first 30)
+        console.log('All tickers in tgt_prices map (first 30):', Array.from(tgtPricesMap.keys()).slice(0, 30))
+      } else {
+        console.log('Target prices: No data returned from query')
+      }
+      console.log('=== END TARGET PRICES ===')
+      
+      // Also log holdings tickers for comparison
+      const holdingsTickers = deduplicatedHoldings.map(h => h.stock_ticker.toUpperCase())
+      console.log('Holdings tickers (first 20):', holdingsTickers.slice(0, 20))
+      
+      // Check which holdings tickers exist in tgt_prices map
+      const holdingsInMap = holdingsTickers.filter(t => tgtPricesMap.has(t))
+      const holdingsNotInMap = holdingsTickers.filter(t => !tgtPricesMap.has(t))
+      console.log(`Holdings matching: ${holdingsInMap.length} found in tgt_prices, ${holdingsNotInMap.length} not found`)
+      if (holdingsNotInMap.length > 0 && holdingsNotInMap.length <= 30) {
+        console.log('Holdings NOT in tgt_prices map:', holdingsNotInMap)
+      }
+      
       // Fetch real-time prices and previous closes from Yahoo Finance
       let pricesMap = new Map<string, { current: number; previousClose: number }>()
       try {
@@ -192,17 +347,49 @@ export default function HoldingsPage() {
         const spyWeight = weights?.spy || null
         const qqqWeight = weights?.qqq || null
         
+        // Get factset data for this ticker
+        const factset = factsetMap.get(h.stock_ticker)
+        
+        // Get target price for this ticker
+        // Normalize ticker: trim whitespace, uppercase
+        const normalizedHoldingTicker = h.stock_ticker.trim().toUpperCase()
+        
+        // Try exact match first (case-insensitive)
+        let targetPrice: number | null = null
+        for (const [mapTicker, mapPrice] of tgtPricesMap.entries()) {
+          const normalizedMapTicker = mapTicker.trim().toUpperCase()
+          if (normalizedMapTicker === normalizedHoldingTicker) {
+            targetPrice = mapPrice
+            break
+          }
+        }
+        
+        // Debug: Log if we couldn't find a target price for common tickers
+        if (!targetPrice && (normalizedHoldingTicker === 'AAPL' || normalizedHoldingTicker === 'MSFT' || normalizedHoldingTicker === 'GOOGL')) {
+          console.log(`No target price found for ${h.stock_ticker}. Available tickers in map:`, 
+            Array.from(tgtPricesMap.keys()).slice(0, 20))
+        }
+        
         // Calculate portfolio weight percentage
         const calculatedWeight = totalMarketValue > 0 ? (h.market_value / totalMarketValue) * 100 : 0
         
-        // Calculate Average Index Weight: (SPY + QQQ) / 2
-        const avgIndexWeight = (spyWeight !== null && qqqWeight !== null) 
-          ? (spyWeight + qqqWeight) / 2 
-          : null
-        
-        // Calculate Index Ratio: Portfolio Weight / QQQ Weight
+        // Calculate Index Ratio: Portfolio Weight / QQQ Weight (as decimal for display as %)
         const indexRatio = (qqqWeight !== null && qqqWeight > 0) 
           ? calculatedWeight / qqqWeight 
+          : null
+        
+        // Calculate % Change
+        const calculatedPctChange = realtimePrice ? ((realtimePrice / previousClose - 1) * 100) :
+                                    h.current_price ? ((h.current_price / previousClose - 1) * 100) : 
+                                    0
+        
+        // Calculate Basis Point Contribution: (weight × daily % change)
+        const basisPointContribution = calculatedWeight * calculatedPctChange / 100
+        
+        // Calculate Upside: (target_price / current_price - 1) * 100
+        const currentPriceForUpside = realtimePrice || h.current_price || h.close_price
+        const upside = (targetPrice && currentPriceForUpside > 0) 
+          ? ((targetPrice / currentPriceForUpside) - 1) * 100 
           : null
         
         return {
@@ -212,27 +399,84 @@ export default function HoldingsPage() {
           previous_close: previousClose,
           sp_weight: spyWeight,
           qqq_weight: qqqWeight,
-          avg_index_weight: avgIndexWeight,
           index_ratio: indexRatio,
-          // Weight: (Market Value / sum of all Market Value) * 100
+          // Beta values from factset_data
+          beta_1y: factset?.beta_1y || null,
+          beta_3y: factset?.beta_3y || null,
+          true_beta: null, // TBD - placeholder
+          // Earnings date from factset_data
+          earnings_date: factset?.earnings_date || h.earnings_date,
+          // Target price from tgt_prices
+          target_price: targetPrice || null,
+          // Placeholder fields
+          net_weight: null, // TBD
+          score: null, // TBD
+          target_weight: null, // TBD
+          // Calculated fields
           calculated_weight: calculatedWeight,
-          // Market Value: Use real-time price if available, otherwise CSV market_value
           calculated_market_value: realtimePrice ? (realtimePrice * h.shares) : 
                                    h.current_price ? (h.current_price * h.shares) : 
                                    h.market_value,
-          // % Change: (current_price / previous_close - 1) * 100 (using Yahoo Finance previous close)
-          calculated_pct_change: realtimePrice ? ((realtimePrice / previousClose - 1) * 100) :
-                                 h.current_price ? ((h.current_price / previousClose - 1) * 100) : 
-                                 0,
-          // Debug: Log close price source for verification
-          _debug_close_source: priceData?.previousClose ? 'Yahoo' : 'CSV'
+          calculated_pct_change: calculatedPctChange,
+          basis_point_contribution: basisPointContribution,
+          upside: upside
         }
       })
+      
+      // Log target price matching summary
+      const holdingsWithTargetPrice = holdingsWithCalcs.filter(h => h.target_price !== null)
+      const holdingsWithoutTargetPrice = holdingsWithCalcs.filter(h => h.target_price === null)
+      console.log(`Target price matching: ${holdingsWithTargetPrice.length} with target price, ${holdingsWithoutTargetPrice.length} without`)
+      if (holdingsWithoutTargetPrice.length > 0 && holdingsWithoutTargetPrice.length <= 20) {
+        console.log('Holdings without target price:', holdingsWithoutTargetPrice.map(h => h.stock_ticker))
+      }
       
       // Calculate and log total value for debugging
       const calculatedTotalValue = holdingsWithCalcs.reduce((sum, h) => sum + h.calculated_market_value, 0)
       const tickersWithYahoo = holdingsWithCalcs.filter(h => pricesMap.has(h.stock_ticker))
       const tickersWithoutYahoo = holdingsWithCalcs.filter(h => !pricesMap.has(h.stock_ticker))
+      
+      // Calculate Portfolio % Change Today
+      // Formula: Sum of all basis point contributions = portfolio return
+      const portfolioReturnToday = holdingsWithCalcs.reduce((sum, h) => sum + h.basis_point_contribution, 0)
+      setPortfolioReturn(portfolioReturnToday)
+      
+      // Fetch benchmark returns (QQQ and SPY)
+      try {
+        const benchmarks = ['QQQ', 'SPY']
+        const benchmarkData: BenchmarkReturn[] = []
+        
+        for (const ticker of benchmarks) {
+          const priceData = pricesMap.get(ticker)
+          if (priceData) {
+            benchmarkData.push({
+              ticker,
+              name: ticker === 'QQQ' ? 'QQQ' : 'S&P 500',
+              currentPrice: priceData.current,
+              previousClose: priceData.previousClose,
+              dailyReturn: ((priceData.current / priceData.previousClose) - 1) * 100
+            })
+          } else {
+            // Fetch directly if not in holdings
+            const response = await fetch(`/api/stock-price?ticker=${ticker}`)
+            if (response.ok) {
+              const result = await response.json()
+              if (result.success && result.data) {
+                benchmarkData.push({
+                  ticker,
+                  name: ticker === 'QQQ' ? 'QQQ' : 'S&P 500',
+                  currentPrice: result.data.price,
+                  previousClose: result.data.previousClose,
+                  dailyReturn: ((result.data.price / result.data.previousClose) - 1) * 100
+                })
+              }
+            }
+          }
+        }
+        setBenchmarkReturns(benchmarkData)
+      } catch (benchmarkError) {
+        console.error('Error fetching benchmark returns:', benchmarkError)
+      }
       
       console.log(`\n=== HOLDINGS TAB - CALCULATION SUMMARY ===`)
       console.log(`Date: ${latestDate}`)
@@ -303,8 +547,6 @@ export default function HoldingsPage() {
     return 0
   })
 
-  const totalValue = holdings.reduce((sum, h) => sum + h.calculated_market_value, 0)
-  
   // Total Cash: Sum of Cash & Other Weight + FGXXX Weight
   const totalCash = holdings.reduce((sum, h) => {
     const ticker = h.stock_ticker.toUpperCase()
@@ -314,7 +556,9 @@ export default function HoldingsPage() {
     return sum
   }, 0)
   
-  const avgWeight = holdings.length > 0 ? holdings.reduce((sum, h) => sum + h.calculated_weight, 0) / holdings.length : 0
+  // Get benchmark returns for display
+  const qqqReturn = benchmarkReturns.find(b => b.ticker === 'QQQ')
+  const spyReturn = benchmarkReturns.find(b => b.ticker === 'SPY')
 
   if (loading) {
     return (
@@ -389,26 +633,29 @@ export default function HoldingsPage() {
             </svg>
             {isRefreshing ? 'Refreshing...' : 'Refresh Now'}
           </button>
-          <div className="text-right">
-            <p className="text-sm text-slate-400">Total Portfolio Value</p>
-            <p className="text-2xl font-bold text-white">
-              ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
         </div>
       </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">Total Holdings</p>
-          <p className="text-2xl font-bold text-white">{holdings.length}</p>
+          <p className="text-sm text-slate-400 mb-1">Portfolio Return Today</p>
+          <p className={`text-2xl font-bold ${portfolioReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {portfolioReturn >= 0 ? '+' : ''}{portfolioReturn.toFixed(2)}%
+          </p>
         </div>
         
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">Market Value</p>
-          <p className="text-2xl font-bold text-white">
-            ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+          <p className="text-sm text-slate-400 mb-1">QQQ Return Today</p>
+          <p className={`text-2xl font-bold ${qqqReturn && qqqReturn.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {qqqReturn ? `${qqqReturn.dailyReturn >= 0 ? '+' : ''}${qqqReturn.dailyReturn.toFixed(2)}%` : '-'}
+          </p>
+        </div>
+
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
+          <p className="text-sm text-slate-400 mb-1">S&P 500 Return Today</p>
+          <p className={`text-2xl font-bold ${spyReturn && spyReturn.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {spyReturn ? `${spyReturn.dailyReturn >= 0 ? '+' : ''}${spyReturn.dailyReturn.toFixed(2)}%` : '-'}
           </p>
         </div>
 
@@ -416,13 +663,6 @@ export default function HoldingsPage() {
           <p className="text-sm text-slate-400 mb-1">Total Cash</p>
           <p className="text-2xl font-bold text-white">
             {totalCash.toFixed(2)}%
-          </p>
-        </div>
-
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">Average Weight</p>
-          <p className="text-2xl font-bold text-white">
-            {avgWeight.toFixed(1)}%
           </p>
         </div>
       </div>
@@ -461,19 +701,7 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 4. QQQ Ratio (moved from position 9) */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('index_ratio')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    QQQ Ratio
-                    {sortColumn === 'index_ratio' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                {/* 5. Shares */}
+                {/* 4. Shares */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('shares')}
@@ -485,14 +713,26 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 6. Current Price */}
+                {/* 5. Current Price */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('current_price')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
                   >
-                    Current Price
+                    Price
                     {sortColumn === 'current_price' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 6. Market Value */}
+                <th className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleSort('calculated_market_value')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Mkt Value
+                    {sortColumn === 'calculated_market_value' && (
                       <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </button>
@@ -503,67 +743,127 @@ export default function HoldingsPage() {
                     onClick={() => handleSort('calculated_pct_change')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
                   >
-                    % Change
+                    % Chg
                     {sortColumn === 'calculated_pct_change' && (
                       <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </button>
                 </th>
-                {/* 8. Market Value */}
+                {/* 8. Basis Point Contribution */}
                 <th className="px-4 py-3 text-right">
                   <button
-                    onClick={() => handleSort('calculated_market_value')}
+                    onClick={() => handleSort('basis_point_contribution')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
                   >
-                    Market Value
-                    {sortColumn === 'calculated_market_value' && (
+                    BP Contrib
+                    {sortColumn === 'basis_point_contribution' && (
                       <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </button>
                 </th>
-                {/* 9. Avg Index Weight */}
+                {/* 9. Beta 1Y */}
                 <th className="px-4 py-3 text-right">
                   <button
-                    onClick={() => handleSort('avg_index_weight')}
+                    onClick={() => handleSort('beta_1y')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
                   >
-                    Avg Index Weight
-                    {sortColumn === 'avg_index_weight' && (
+                    Beta 1Y
+                    {sortColumn === 'beta_1y' && (
                       <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </button>
                 </th>
-                {/* 10. QQQ Weight */}
+                {/* 10. Beta 3Y */}
+                <th className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleSort('beta_3y')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Beta 3Y
+                    {sortColumn === 'beta_3y' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 11. True Beta */}
+                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                  True Beta
+                </th>
+                {/* 12. QQQ Ratio */}
+                <th className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleSort('index_ratio')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    QQQ Ratio
+                    {sortColumn === 'index_ratio' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 13. QQQ Weight */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('qqq_weight')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
                   >
-                    QQQ Weight
+                    QQQ Wt
                     {sortColumn === 'qqq_weight' && (
                       <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </button>
                 </th>
-                {/* 11. S&P Weight */}
+                {/* 14. S&P Weight */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('sp_weight')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
                   >
-                    S&P Weight
+                    S&P Wt
                     {sortColumn === 'sp_weight' && (
                       <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
                     )}
                   </button>
                 </th>
-                {/* 12. Earnings Date */}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                  Earnings Date
+                {/* 15. Net Weight (placeholder) */}
+                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                  Net Wt
                 </th>
-                {/* 13. Earnings Time */}
+                {/* 16. Target Price */}
+                <th className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleSort('target_price')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Tgt Price
+                    {sortColumn === 'target_price' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 17. Upside */}
+                <th className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleSort('upside')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Upside
+                    {sortColumn === 'upside' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 18. Score (placeholder) */}
+                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                  Score
+                </th>
+                {/* 19. Target Weight (placeholder) */}
+                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                  Tgt Wt
+                </th>
+                {/* 20. Earnings Date */}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                  Earnings Time
+                  Earnings
                 </th>
               </tr>
             </thead>
@@ -572,60 +872,91 @@ export default function HoldingsPage() {
                 <tr key={holding.stock_ticker} className="hover:bg-slate-700/50 transition-colors">
                   {/* 1. Ticker */}
                   <td className="px-4 py-3">
-                    <span className="text-sm text-slate-300">{holding.stock_ticker}</span>
+                    <span className="text-sm font-medium text-white">{holding.stock_ticker}</span>
                   </td>
                   {/* 2. Name */}
-                  <td className="px-4 py-3 text-sm text-slate-300">
+                  <td className="px-4 py-3 text-sm text-slate-300 max-w-[200px] truncate">
                     {holding.security_name}
                   </td>
                   {/* 3. Weight (calculated) - 1 decimal place */}
                   <td className="px-4 py-3 text-right text-sm font-medium text-white">
                     {holding.calculated_weight.toFixed(1)}%
                   </td>
-                  {/* 4. QQQ Ratio (Portfolio Weight / QQQ Weight) - moved here, formatted as % with 0 decimals */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.index_ratio ? 'text-white' : 'text-slate-500 italic'}`}>
-                    {holding.index_ratio ? `${(holding.index_ratio * 100).toFixed(0)}%` : '-'}
-                  </td>
-                  {/* 5. Shares */}
-                  <td className="px-4 py-3 text-right text-sm text-white">
+                  {/* 4. Shares */}
+                  <td className="px-4 py-3 text-right text-sm text-slate-300">
                     {holding.shares.toLocaleString()}
                   </td>
-                  {/* 6. Current Price (use close_price as fallback) */}
+                  {/* 5. Current Price (use close_price as fallback) */}
                   <td className="px-4 py-3 text-right text-sm text-white">
                     ${(holding.current_price || holding.close_price).toFixed(2)}
-                    {!holding.current_price && <span className="text-xs text-zinc-400 ml-1">(close)</span>}
+                  </td>
+                  {/* 6. Market Value (calculated) */}
+                  <td className="px-4 py-3 text-right text-sm text-slate-300">
+                    ${holding.calculated_market_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </td>
                   {/* 7. % Change (calculated) */}
-                  <td className={`px-4 py-3 text-right text-sm font-medium ${holding.calculated_pct_change > 0 ? 'text-green-400' : holding.calculated_pct_change < 0 ? 'text-red-400' : 'text-white'}`}>
+                  <td className={`px-4 py-3 text-right text-sm font-medium ${holding.calculated_pct_change > 0 ? 'text-green-400' : holding.calculated_pct_change < 0 ? 'text-red-400' : 'text-slate-300'}`}>
                     {holding.current_price ? (
                       `${holding.calculated_pct_change >= 0 ? '+' : ''}${holding.calculated_pct_change.toFixed(2)}%`
                     ) : (
-                      <span className="text-zinc-400">-</span>
+                      <span className="text-slate-500">-</span>
                     )}
                   </td>
-                  {/* 8. Market Value (calculated) */}
-                  <td className="px-4 py-3 text-right text-sm font-medium text-white">
-                    ${holding.calculated_market_value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {/* 8. Basis Point Contribution */}
+                  <td className={`px-4 py-3 text-right text-sm font-medium ${holding.basis_point_contribution > 0 ? 'text-green-400' : holding.basis_point_contribution < 0 ? 'text-red-400' : 'text-slate-300'}`}>
+                    {holding.current_price ? (
+                      `${holding.basis_point_contribution >= 0 ? '+' : ''}${(holding.basis_point_contribution * 100).toFixed(0)}`
+                    ) : (
+                      <span className="text-slate-500">-</span>
+                    )}
                   </td>
-                  {/* 9. Avg Index Weight (calculated from SPY + QQQ) - 1 decimal place */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.avg_index_weight ? 'text-white' : 'text-slate-500 italic'}`}>
-                    {holding.avg_index_weight ? `${holding.avg_index_weight.toFixed(1)}%` : '-'}
+                  {/* 9. Beta 1Y */}
+                  <td className={`px-4 py-3 text-right text-sm ${holding.beta_1y ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.beta_1y ? holding.beta_1y.toFixed(2) : '-'}
                   </td>
-                  {/* 10. QQQ Weight (from weightings table) - 1 decimal place */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.qqq_weight ? 'text-white' : 'text-slate-500 italic'}`}>
+                  {/* 10. Beta 3Y */}
+                  <td className={`px-4 py-3 text-right text-sm ${holding.beta_3y ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.beta_3y ? holding.beta_3y.toFixed(2) : '-'}
+                  </td>
+                  {/* 11. True Beta (placeholder) */}
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">
+                    -
+                  </td>
+                  {/* 12. QQQ Ratio (Portfolio Weight / QQQ Weight) - formatted as % */}
+                  <td className={`px-4 py-3 text-right text-sm ${holding.index_ratio ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.index_ratio ? `${(holding.index_ratio * 100).toFixed(0)}%` : '-'}
+                  </td>
+                  {/* 13. QQQ Weight (from weightings table) - 1 decimal place */}
+                  <td className={`px-4 py-3 text-right text-sm ${holding.qqq_weight ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.qqq_weight ? `${holding.qqq_weight.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 11. S&P Weight (from weightings table) - 1 decimal place */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.sp_weight ? 'text-white' : 'text-slate-500 italic'}`}>
+                  {/* 14. S&P Weight (from weightings table) - 1 decimal place */}
+                  <td className={`px-4 py-3 text-right text-sm ${holding.sp_weight ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.sp_weight ? `${holding.sp_weight.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 12. Earnings Date (placeholder) */}
-                  <td className="px-4 py-3 text-sm text-slate-500 italic">
-                    {holding.earnings_date || '-'}
+                  {/* 15. Net Weight (placeholder) */}
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">
+                    -
                   </td>
-                  {/* 13. Earnings Time (placeholder) */}
-                  <td className="px-4 py-3 text-sm text-slate-500 italic">
-                    {holding.earnings_time || '-'}
+                  {/* 16. Target Price */}
+                  <td className={`px-4 py-3 text-right text-sm ${holding.target_price ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.target_price ? `$${holding.target_price.toFixed(2)}` : '-'}
+                  </td>
+                  {/* 17. Upside */}
+                  <td className={`px-4 py-3 text-right text-sm font-medium ${holding.upside && holding.upside > 0 ? 'text-green-400' : holding.upside && holding.upside < 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                    {holding.upside !== null && holding.upside !== undefined ? `${holding.upside >= 0 ? '+' : ''}${holding.upside.toFixed(1)}%` : '-'}
+                  </td>
+                  {/* 18. Score (placeholder) */}
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">
+                    -
+                  </td>
+                  {/* 19. Target Weight (placeholder) */}
+                  <td className="px-4 py-3 text-right text-sm text-slate-500">
+                    -
+                  </td>
+                  {/* 20. Earnings Date */}
+                  <td className="px-4 py-3 text-sm text-slate-500">
+                    {holding.earnings_date || '-'}
                   </td>
                 </tr>
               ))}

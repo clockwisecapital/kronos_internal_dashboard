@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
       data: {
         ticker: priceData.ticker,
         price: priceData.currentPrice,
+        previousClose: priceData.previousClose,
         change: priceData.change,
         changePercent: priceData.changePercent,
         timestamp: priceData.timestamp
