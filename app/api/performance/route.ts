@@ -13,9 +13,7 @@ import {
 } from '@/lib/utils/holdings'
 import {
   calculateAllHoldingsPerformance,
-  calculatePortfolioTotals,
-  type HoldingPerformance,
-  type PortfolioTotals
+  type HoldingPerformance
 } from '@/lib/calculators/performance'
 
 export const dynamic = 'force-dynamic'
@@ -25,7 +23,7 @@ interface PerformanceResponse {
   success: boolean
   data?: {
     holdings: HoldingPerformance[]
-    totals: PortfolioTotals
+    benchmarks: HoldingPerformance[]
   }
   message?: string
   timestamp: string
@@ -125,18 +123,29 @@ export async function GET() {
       5 // Process 5 holdings at a time
     )
 
-    // 8. Calculate portfolio totals
-    const totals = calculatePortfolioTotals(performanceData)
-    
-    console.log('Portfolio Totals:')
-    console.log(`  1-Day:  ${totals.total_contribution_1d.toFixed(2)}%`)
-    console.log(`  5-Day:  ${totals.total_contribution_5d.toFixed(2)}%`)
-    console.log(`  30-Day: ${totals.total_contribution_30d.toFixed(2)}%`)
-    console.log(`  QTD:    ${totals.total_contribution_qtd.toFixed(2)}%`)
-    console.log(`  YTD:    ${totals.total_contribution_ytd.toFixed(2)}%`)
-
-    // 9. Sort by weight (largest positions first)
+    // 8. Sort by weight (largest positions first)
     performanceData.sort((a, b) => b.weight - a.weight)
+
+    // 9. Calculate benchmark performance (SPY and QQQ)
+    console.log('Calculating benchmark performance (SPY, QQQ)...')
+    const benchmarkTickers = ['SPY', 'QQQ']
+    const benchmarksWithPrices = []
+    
+    for (const ticker of benchmarkTickers) {
+      const quoteData = await fetchQuote(ticker)
+      if (quoteData && quoteData.currentPrice > 0) {
+        benchmarksWithPrices.push({
+          ticker,
+          currentPrice: quoteData.currentPrice,
+          weight: 0 // Benchmarks don't have portfolio weight
+        })
+      }
+    }
+    
+    const benchmarkPerformance = await calculateAllHoldingsPerformance(
+      benchmarksWithPrices,
+      2 // Process benchmarks together
+    )
 
     console.log('=== Performance API: Calculation complete ===')
 
@@ -144,7 +153,7 @@ export async function GET() {
       success: true,
       data: {
         holdings: performanceData,
-        totals
+        benchmarks: benchmarkPerformance
       },
       timestamp: new Date().toISOString()
     })

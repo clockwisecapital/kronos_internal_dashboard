@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/app/utils/supabase/client'
 import { setupSynchronizedRefresh } from '@/lib/utils/refreshSync'
+import { calculateEffectiveHedge } from '@/lib/utils/shorts'
 
 interface Holding {
   date: string
@@ -28,6 +29,7 @@ interface Holding {
   // New fields from factset_data
   beta_1y?: number
   beta_3y?: number
+  beta_5y?: number
   true_beta?: number  // TBD - placeholder
   // New fields from tgt_prices
   target_price?: number
@@ -174,68 +176,52 @@ export default function HoldingsPage() {
         weightingsData?.map(w => [w.ticker, { spy: w.spy, qqq: w.qqq }]) || []
       )
       
-      // Fetch factset_data for beta values
-      const { data: factsetData, error: factsetError } = await supabase
-        .from('factset_data')
-        .select('"TICKER", "BETA 1Y", "BETA 3Y", "Next Earnings Date"')
-      
-      if (factsetError) {
-        console.warn('Failed to fetch factset data:', factsetError.message)
-      }
-      
-      // Create lookup map for factset data
-      const factsetMap = new Map(
-        factsetData?.map(f => [f.TICKER, { 
-          beta_1y: f['BETA 1Y'] ? parseFloat(f['BETA 1Y']) : null,
-          beta_3y: f['BETA 3Y'] ? parseFloat(f['BETA 3Y']) : null,
-          earnings_date: f['Next Earnings Date'] || null
-        }]) || []
-      )
-      
-      // Fetch target prices from tgt_prices table
-      // Fetch ALL records using pagination to bypass default limits
-      console.log('=== FETCHING TARGET PRICES ===')
-      let tgtPricesData: any[] = []
-      let tgtPricesError = null
-      let start = 0
-      const batchSize = 1000
-      let hasMore = true
-      
-      // Fetch in batches until we get all records
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('tgt_prices')
-          .select('*')
-          .range(start, start + batchSize - 1)
-        
-        if (error) {
-          tgtPricesError = error
-          break
-        }
-        
-        if (data && data.length > 0) {
-          tgtPricesData.push(...data)
-          console.log(`Fetched batch: ${start} to ${start + data.length - 1}`)
-          
-          // If we got less than batchSize, we've reached the end
-          if (data.length < batchSize) {
-            hasMore = false
-          } else {
-            start += batchSize
+      // Fetch factset_data from API route (uses service role key to bypass RLS)
+      let factsetData: any[] = []
+      try {
+        const factsetResponse = await fetch('/api/factset')
+        if (factsetResponse.ok) {
+          const factsetResult = await factsetResponse.json()
+          if (factsetResult.success) {
+            factsetData = factsetResult.data
           }
         } else {
-          hasMore = false
+          console.warn('Failed to fetch factset data:', factsetResponse.statusText)
         }
+      } catch (error) {
+        console.error('Error fetching factset data:', error)
       }
       
-      console.log('tgt_prices query result:', { 
-        hasData: !!tgtPricesData, 
-        length: tgtPricesData?.length,
-        error: tgtPricesError?.message 
-      })
+      // Create lookup map for factset data (normalize ticker to uppercase)
+      const factsetMap = new Map(
+        factsetData?.map(f => {
+          const ticker = (f.Ticker || f.TICKER || '').trim().toUpperCase()
+          return [ticker, { 
+            beta_1y: f['BETA 1Y'] ? parseFloat(f['BETA 1Y']) : null,
+            beta_3y: f['BETA 3Y'] ? parseFloat(f['BETA 3Y']) : null,
+            beta_5y: f['5 yr beta'] ? parseFloat(f['5 yr beta']) : null,
+            earnings_date: f['Next Earnings Date'] || null
+          }]
+        }) || []
+      )
+      console.log(`Factset data: Loaded ${factsetMap.size} records`)
       
-      if (tgtPricesError) {
-        console.error('Failed to fetch target prices:', tgtPricesError)
+      // Fetch target prices from API route (uses service role key to bypass RLS)
+      console.log('=== FETCHING TARGET PRICES ===')
+      let tgtPricesData: any[] = []
+      try {
+        const tgtPricesResponse = await fetch('/api/target-prices')
+        if (tgtPricesResponse.ok) {
+          const tgtPricesResult = await tgtPricesResponse.json()
+          if (tgtPricesResult.success) {
+            tgtPricesData = tgtPricesResult.data
+            console.log(`Target Prices API: Fetched ${tgtPricesData.length} records`)
+          }
+        } else {
+          console.warn('Failed to fetch target prices:', tgtPricesResponse.statusText)
+        }
+      } catch (error) {
+        console.error('Error fetching target prices:', error)
       }
       
       // Debug: Log first record to see actual column names
@@ -403,6 +389,7 @@ export default function HoldingsPage() {
           // Beta values from factset_data
           beta_1y: factset?.beta_1y || null,
           beta_3y: factset?.beta_3y || null,
+          beta_5y: factset?.beta_5y || null,
           true_beta: null, // TBD - placeholder
           // Earnings date from factset_data
           earnings_date: factset?.earnings_date || h.earnings_date,
@@ -547,6 +534,11 @@ export default function HoldingsPage() {
     return 0
   })
 
+  // Effective Hedge: Sum of all shorts exposure (using centralized calculation)
+  const effectiveHedge = calculateEffectiveHedge(
+    holdings.map(h => ({ ticker: h.stock_ticker, weight: h.calculated_weight }))
+  )
+
   // Total Cash: Sum of Cash & Other Weight + FGXXX Weight
   const totalCash = holdings.reduce((sum, h) => {
     const ticker = h.stock_ticker.toUpperCase()
@@ -637,7 +629,7 @@ export default function HoldingsPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
           <p className="text-sm text-slate-400 mb-1">Portfolio Return Today</p>
           <p className={`text-2xl font-bold ${portfolioReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -656,6 +648,13 @@ export default function HoldingsPage() {
           <p className="text-sm text-slate-400 mb-1">S&P 500 Return Today</p>
           <p className={`text-2xl font-bold ${spyReturn && spyReturn.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {spyReturn ? `${spyReturn.dailyReturn >= 0 ? '+' : ''}${spyReturn.dailyReturn.toFixed(2)}%` : '-'}
+          </p>
+        </div>
+
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
+          <p className="text-sm text-slate-400 mb-1">Effective Hedge</p>
+          <p className="text-2xl font-bold text-orange-400">
+            {(effectiveHedge / 100).toFixed(4)}
           </p>
         </div>
 
@@ -785,11 +784,23 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 11. True Beta */}
+                {/* 11. Beta 5Y */}
+                <th className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => handleSort('beta_5y')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Beta 5Y
+                    {sortColumn === 'beta_5y' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 12. True Beta */}
                 <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
                   True Beta
                 </th>
-                {/* 12. QQQ Ratio */}
+                {/* 13. QQQ Ratio */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('index_ratio')}
@@ -801,7 +812,7 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 13. QQQ Weight */}
+                {/* 14. QQQ Weight */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('qqq_weight')}
@@ -813,7 +824,7 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 14. S&P Weight */}
+                {/* 15. S&P Weight */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('sp_weight')}
@@ -825,11 +836,11 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 15. Net Weight (placeholder) */}
+                {/* 16. Net Weight (placeholder) */}
                 <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
                   Net Wt
                 </th>
-                {/* 16. Target Price */}
+                {/* 17. Target Price */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('target_price')}
@@ -841,7 +852,7 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 17. Upside */}
+                {/* 18. Upside */}
                 <th className="px-4 py-3 text-right">
                   <button
                     onClick={() => handleSort('upside')}
@@ -853,15 +864,15 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 18. Score (placeholder) */}
+                {/* 19. Score (placeholder) */}
                 <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
                   Score
                 </th>
-                {/* 19. Target Weight (placeholder) */}
+                {/* 20. Target Weight (placeholder) */}
                 <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
                   Tgt Wt
                 </th>
-                {/* 20. Earnings Date */}
+                {/* 21. Earnings Date */}
                 <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Earnings
                 </th>
@@ -918,43 +929,47 @@ export default function HoldingsPage() {
                   <td className={`px-4 py-3 text-right text-sm ${holding.beta_3y ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.beta_3y ? holding.beta_3y.toFixed(2) : '-'}
                   </td>
-                  {/* 11. True Beta (placeholder) */}
+                  {/* 11. Beta 5Y */}
+                  <td className={`px-4 py-3 text-right text-sm ${holding.beta_5y ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.beta_5y ? holding.beta_5y.toFixed(2) : '-'}
+                  </td>
+                  {/* 12. True Beta (placeholder) */}
                   <td className="px-4 py-3 text-right text-sm text-slate-500">
                     -
                   </td>
-                  {/* 12. QQQ Ratio (Portfolio Weight / QQQ Weight) - formatted as % */}
+                  {/* 13. QQQ Ratio (Portfolio Weight / QQQ Weight) - formatted as % */}
                   <td className={`px-4 py-3 text-right text-sm ${holding.index_ratio ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.index_ratio ? `${(holding.index_ratio * 100).toFixed(0)}%` : '-'}
                   </td>
-                  {/* 13. QQQ Weight (from weightings table) - 1 decimal place */}
+                  {/* 14. QQQ Weight (from weightings table) - 1 decimal place */}
                   <td className={`px-4 py-3 text-right text-sm ${holding.qqq_weight ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.qqq_weight ? `${holding.qqq_weight.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 14. S&P Weight (from weightings table) - 1 decimal place */}
+                  {/* 15. S&P Weight (from weightings table) - 1 decimal place */}
                   <td className={`px-4 py-3 text-right text-sm ${holding.sp_weight ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.sp_weight ? `${holding.sp_weight.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 15. Net Weight (placeholder) */}
+                  {/* 16. Net Weight (placeholder) */}
                   <td className="px-4 py-3 text-right text-sm text-slate-500">
                     -
                   </td>
-                  {/* 16. Target Price */}
+                  {/* 17. Target Price */}
                   <td className={`px-4 py-3 text-right text-sm ${holding.target_price ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.target_price ? `$${holding.target_price.toFixed(2)}` : '-'}
                   </td>
-                  {/* 17. Upside */}
+                  {/* 18. Upside */}
                   <td className={`px-4 py-3 text-right text-sm font-medium ${holding.upside && holding.upside > 0 ? 'text-green-400' : holding.upside && holding.upside < 0 ? 'text-red-400' : 'text-slate-500'}`}>
                     {holding.upside !== null && holding.upside !== undefined ? `${holding.upside >= 0 ? '+' : ''}${holding.upside.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 18. Score (placeholder) */}
+                  {/* 19. Score (placeholder) */}
                   <td className="px-4 py-3 text-right text-sm text-slate-500">
                     -
                   </td>
-                  {/* 19. Target Weight (placeholder) */}
+                  {/* 20. Target Weight (placeholder) */}
                   <td className="px-4 py-3 text-right text-sm text-slate-500">
                     -
                   </td>
-                  {/* 20. Earnings Date */}
+                  {/* 21. Earnings Date */}
                   <td className="px-4 py-3 text-sm text-slate-500">
                     {holding.earnings_date || '-'}
                   </td>

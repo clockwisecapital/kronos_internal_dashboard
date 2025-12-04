@@ -10,24 +10,11 @@ interface HoldingPerformance {
   return_30d: number
   return_qtd: number
   return_ytd: number
-  contribution_1d: number
-  contribution_5d: number
-  contribution_30d: number
-  contribution_qtd: number
-  contribution_ytd: number
-}
-
-interface PortfolioTotals {
-  total_contribution_1d: number
-  total_contribution_5d: number
-  total_contribution_30d: number
-  total_contribution_qtd: number
-  total_contribution_ytd: number
 }
 
 export default function PerformancePage() {
   const [performanceData, setPerformanceData] = useState<HoldingPerformance[]>([])
-  const [totals, setTotals] = useState<PortfolioTotals | null>(null)
+  const [benchmarks, setBenchmarks] = useState<HoldingPerformance[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -52,7 +39,7 @@ export default function PerformancePage() {
         
         console.log('Performance data loaded:', json.data)
         setPerformanceData(json.data.holdings)
-        setTotals(json.data.totals)
+        setBenchmarks(json.data.benchmarks || [])
       } catch (err) {
         console.error('Error fetching performance data:', err)
         setError(err instanceof Error ? err.message : 'Unknown error')
@@ -77,7 +64,7 @@ export default function PerformancePage() {
         </div>
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-12 text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="text-slate-400 mt-4">Calculating returns and contributions...</p>
+          <p className="text-slate-400 mt-4">Calculating returns...</p>
         </div>
       </div>
     )
@@ -107,21 +94,88 @@ export default function PerformancePage() {
       {/* Page Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white">
-          Performance Attribution
+          Performance
         </h1>
         <p className="text-slate-400 mt-1">
-          Individual holding performance and portfolio contribution analysis
+          Individual holding performance across all time periods
         </p>
       </div>
 
-      {/* Combined Performance Table */}
+      {/* Benchmark Performance Table */}
+      {benchmarks.length > 0 && (
+        <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-xl border border-blue-700/50 overflow-hidden shadow-xl">
+          <div className="p-6 border-b border-blue-700/50">
+            <h2 className="text-lg font-semibold text-white">
+              Market Benchmarks
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">
+              SPY and QQQ performance for comparison
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-700/50 border-b border-blue-700/50">
+                  <th className="text-left py-3 px-6 font-semibold text-white">
+                    Ticker
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    1-Day Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    5-Day Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    30-Day Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    QTD Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    YTD Return
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {benchmarks.map((benchmark) => (
+                  <tr
+                    key={benchmark.ticker}
+                    className="border-b border-blue-700/30 hover:bg-blue-900/20 transition-colors"
+                  >
+                    <td className="py-4 px-6 font-bold text-blue-300">
+                      {benchmark.ticker}
+                    </td>
+                    <td className={`text-right py-4 px-6 font-medium ${benchmark.return_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {benchmark.return_1d > 0 ? '+' : ''}{benchmark.return_1d.toFixed(2)}%
+                    </td>
+                    <td className={`text-right py-4 px-6 font-medium ${benchmark.return_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {benchmark.return_5d > 0 ? '+' : ''}{benchmark.return_5d.toFixed(2)}%
+                    </td>
+                    <td className={`text-right py-4 px-6 font-medium ${benchmark.return_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {benchmark.return_30d > 0 ? '+' : ''}{benchmark.return_30d.toFixed(2)}%
+                    </td>
+                    <td className={`text-right py-4 px-6 font-medium ${benchmark.return_qtd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {benchmark.return_qtd > 0 ? '+' : ''}{benchmark.return_qtd.toFixed(2)}%
+                    </td>
+                    <td className={`text-right py-4 px-6 font-medium ${benchmark.return_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {benchmark.return_ytd > 0 ? '+' : ''}{benchmark.return_ytd.toFixed(2)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Holdings Performance Table */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
         <div className="p-6 border-b border-slate-700">
           <h2 className="text-lg font-semibold text-white">
-            Complete Performance Analysis
+            Portfolio Holdings
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Holdings returns and portfolio contribution across all time periods
+            Individual position returns across all time periods
           </p>
         </div>
         <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
@@ -134,35 +188,20 @@ export default function PerformancePage() {
                 <th className="text-right py-3 px-6 font-semibold text-white">
                   Weight
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-blue-900/30">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   1-Day Return
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-blue-900/30">
-                  1-Day Contrib
-                </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-purple-900/30">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   5-Day Return
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-purple-900/30">
-                  5-Day Contrib
-                </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-indigo-900/30">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   30-Day Return
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-indigo-900/30">
-                  30-Day Contrib
-                </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-cyan-900/30">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   QTD Return
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-cyan-900/30">
-                  QTD Contrib
-                </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-emerald-900/30">
+                <th className="text-right py-3 px-6 font-semibold text-white">
                   YTD Return
-                </th>
-                <th className="text-right py-3 px-6 font-semibold text-white bg-emerald-900/30">
-                  YTD Contrib
                 </th>
               </tr>
             </thead>
@@ -178,89 +217,23 @@ export default function PerformancePage() {
                   <td className="text-right py-4 px-6 text-slate-300">
                     {stock.weight.toFixed(1)}%
                   </td>
-                  {/* 1-Day */}
-                  <td className={`text-right py-4 px-6 font-medium bg-blue-900/10 ${stock.return_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return_1d > 0 ? '+' : ''}{stock.return_1d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium bg-blue-900/10 ${stock.contribution_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contribution_1d > 0 ? '+' : ''}{stock.contribution_1d.toFixed(2)}%
-                  </td>
-                  {/* 5-Day */}
-                  <td className={`text-right py-4 px-6 font-medium bg-purple-900/10 ${stock.return_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return_5d > 0 ? '+' : ''}{stock.return_5d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium bg-purple-900/10 ${stock.contribution_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contribution_5d > 0 ? '+' : ''}{stock.contribution_5d.toFixed(2)}%
-                  </td>
-                  {/* 30-Day */}
-                  <td className={`text-right py-4 px-6 font-medium bg-indigo-900/10 ${stock.return_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return_30d > 0 ? '+' : ''}{stock.return_30d.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium bg-indigo-900/10 ${stock.contribution_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contribution_30d > 0 ? '+' : ''}{stock.contribution_30d.toFixed(2)}%
-                  </td>
-                  {/* QTD */}
-                  <td className={`text-right py-4 px-6 font-medium bg-cyan-900/10 ${stock.return_qtd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_qtd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return_qtd > 0 ? '+' : ''}{stock.return_qtd.toFixed(1)}%
                   </td>
-                  <td className={`text-right py-4 px-6 font-medium bg-cyan-900/10 ${stock.contribution_qtd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contribution_qtd > 0 ? '+' : ''}{stock.contribution_qtd.toFixed(2)}%
-                  </td>
-                  {/* YTD */}
-                  <td className={`text-right py-4 px-6 font-medium bg-emerald-900/10 ${stock.return_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return_ytd > 0 ? '+' : ''}{stock.return_ytd.toFixed(1)}%
-                  </td>
-                  <td className={`text-right py-4 px-6 font-medium bg-emerald-900/10 ${stock.contribution_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {stock.contribution_ytd > 0 ? '+' : ''}{stock.contribution_ytd.toFixed(2)}%
                   </td>
                 </tr>
               ))}
-              {/* Totals Row */}
-              {totals && (
-                <tr className="bg-slate-900 border-t-2 border-blue-500 sticky bottom-0">
-                  <td className="py-4 px-6 font-bold text-white sticky left-0 bg-slate-900">
-                    TOTAL PORTFOLIO
-                  </td>
-                  <td className="text-right py-4 px-6 text-slate-300">
-                    100.0%
-                  </td>
-                  {/* 1-Day Totals */}
-                  <td className="text-right py-4 px-6 bg-blue-900/20">
-                    {/* Return is same as contribution for portfolio */}
-                  </td>
-                  <td className={`text-right py-4 px-6 font-bold bg-blue-900/20 ${totals.total_contribution_1d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {totals.total_contribution_1d > 0 ? '+' : ''}{totals.total_contribution_1d.toFixed(2)}%
-                  </td>
-                  {/* 5-Day Totals */}
-                  <td className="text-right py-4 px-6 bg-purple-900/20">
-                    {/* Return is same as contribution for portfolio */}
-                  </td>
-                  <td className={`text-right py-4 px-6 font-bold bg-purple-900/20 ${totals.total_contribution_5d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {totals.total_contribution_5d > 0 ? '+' : ''}{totals.total_contribution_5d.toFixed(2)}%
-                  </td>
-                  {/* 30-Day Totals */}
-                  <td className="text-right py-4 px-6 bg-indigo-900/20">
-                    {/* Return is same as contribution for portfolio */}
-                  </td>
-                  <td className={`text-right py-4 px-6 font-bold bg-indigo-900/20 ${totals.total_contribution_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {totals.total_contribution_30d > 0 ? '+' : ''}{totals.total_contribution_30d.toFixed(2)}%
-                  </td>
-                  {/* QTD Totals */}
-                  <td className="text-right py-4 px-6 bg-cyan-900/20">
-                    {/* Return is same as contribution for portfolio */}
-                  </td>
-                  <td className={`text-right py-4 px-6 font-bold bg-cyan-900/20 ${totals.total_contribution_qtd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {totals.total_contribution_qtd > 0 ? '+' : ''}{totals.total_contribution_qtd.toFixed(2)}%
-                  </td>
-                  {/* YTD Totals */}
-                  <td className="text-right py-4 px-6 bg-emerald-900/20">
-                    {/* Return is same as contribution for portfolio */}
-                  </td>
-                  <td className={`text-right py-4 px-6 font-bold bg-emerald-900/20 ${totals.total_contribution_ytd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {totals.total_contribution_ytd > 0 ? '+' : ''}{totals.total_contribution_ytd.toFixed(2)}%
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

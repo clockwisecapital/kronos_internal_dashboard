@@ -15,21 +15,6 @@ export interface HoldingPerformance {
   return_30d: number
   return_qtd: number
   return_ytd: number
-  
-  // Contributions (%)
-  contribution_1d: number
-  contribution_5d: number
-  contribution_30d: number
-  contribution_qtd: number
-  contribution_ytd: number
-}
-
-export interface PortfolioTotals {
-  total_contribution_1d: number
-  total_contribution_5d: number
-  total_contribution_30d: number
-  total_contribution_qtd: number
-  total_contribution_ytd: number
 }
 
 /**
@@ -39,14 +24,6 @@ export interface PortfolioTotals {
 export function calculateReturn(currentPrice: number, previousPrice: number): number {
   if (previousPrice === 0 || !previousPrice) return 0
   return ((currentPrice / previousPrice) - 1) * 100
-}
-
-/**
- * Calculate contribution to portfolio
- * Formula: (Weight / 100) * Return
- */
-export function calculateContribution(weightPct: number, returnPct: number): number {
-  return (weightPct / 100) * returnPct
 }
 
 /**
@@ -76,14 +53,7 @@ export async function calculateHoldingPerformance(
     const return_qtd = priceEndOfLastQuarter ? calculateReturn(currentPrice, priceEndOfLastQuarter) : 0
     const return_ytd = priceEndOfLastYear ? calculateReturn(currentPrice, priceEndOfLastYear) : 0
     
-    // Calculate contributions to portfolio
-    const contribution_1d = calculateContribution(weight, return_1d)
-    const contribution_5d = calculateContribution(weight, return_5d)
-    const contribution_30d = calculateContribution(weight, return_30d)
-    const contribution_qtd = calculateContribution(weight, return_qtd)
-    const contribution_ytd = calculateContribution(weight, return_ytd)
-    
-    console.log(`${ticker}: 1D=${return_1d.toFixed(2)}%, Contrib=${contribution_1d.toFixed(3)}%`)
+    console.log(`${ticker}: 1D=${return_1d.toFixed(2)}%`)
     
     return {
       ticker,
@@ -92,12 +62,7 @@ export async function calculateHoldingPerformance(
       return_5d,
       return_30d,
       return_qtd,
-      return_ytd,
-      contribution_1d,
-      contribution_5d,
-      contribution_30d,
-      contribution_qtd,
-      contribution_ytd
+      return_ytd
     }
   } catch (error) {
     console.error(`Error calculating performance for ${ticker}:`, error)
@@ -110,26 +75,8 @@ export async function calculateHoldingPerformance(
       return_5d: 0,
       return_30d: 0,
       return_qtd: 0,
-      return_ytd: 0,
-      contribution_1d: 0,
-      contribution_5d: 0,
-      contribution_30d: 0,
-      contribution_qtd: 0,
-      contribution_ytd: 0
+      return_ytd: 0
     }
-  }
-}
-
-/**
- * Calculate portfolio totals by summing all contributions
- */
-export function calculatePortfolioTotals(holdings: HoldingPerformance[]): PortfolioTotals {
-  return {
-    total_contribution_1d: holdings.reduce((sum, h) => sum + h.contribution_1d, 0),
-    total_contribution_5d: holdings.reduce((sum, h) => sum + h.contribution_5d, 0),
-    total_contribution_30d: holdings.reduce((sum, h) => sum + h.contribution_30d, 0),
-    total_contribution_qtd: holdings.reduce((sum, h) => sum + h.contribution_qtd, 0),
-    total_contribution_ytd: holdings.reduce((sum, h) => sum + h.contribution_ytd, 0)
   }
 }
 

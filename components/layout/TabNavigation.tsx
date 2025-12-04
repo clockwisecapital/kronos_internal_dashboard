@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 const tabs = [
   { name: 'CSV Upload', path: '/data-upload' },
   { name: 'Holdings', path: '/holdings' },
-  { name: 'Portfolio', path: '/portfolio' },
+  { name: 'Net Weight Calculations', path: '/portfolio' },
   { name: 'Performance', path: '/performance' },
   { name: 'Universe', path: '/universe' },
   { name: 'Exposure', path: '/exposure' },
