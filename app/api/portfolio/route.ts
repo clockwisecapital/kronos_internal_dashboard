@@ -1,13 +1,22 @@
 // Portfolio API Route - Net Weight Calculations (Holdings, Weightings, Net Weight)
+// Implements client formula: Net Weight = Holding Weight - Effective Short
+// Effective Short = F×G + K×L + P×Q + R×S + T×U (index shorts × stock's index weight)
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/app/utils/supabase/server'
 import {
   getLatestHoldingsDate,
   deduplicateByTicker,
-  filterValidTickers
 } from '@/lib/utils/holdings'
-import { calculateShorts } from '@/lib/utils/shorts'
+import {
+  calculateIndexShortTotals,
+  calculateStockEffectiveShort,
+  calculateStockEffectiveShortBreakdown,
+  calculateInverseETFContributions,
+  IndexShortTotals,
+  ShortBreakdown,
+  StockWeights
+} from '@/lib/utils/shorts'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -24,7 +33,10 @@ interface WeightingData {
   name: string
   spy: number | null
   qqq: number | null
-  xlk: number | null
+  dow: number | null
+  soxx: number | null
+  smh: number | null
+  arkk: number | null
   [key: string]: any
 }
 
@@ -34,18 +46,33 @@ interface NetWeightRow {
   shares: number
   market_value: number
   holding_weight: number
-  shorts: number | null
-  benchmark_weight: number | null
-  net_weight: number | null
+  // Individual inverse ETF contributions
+  sqqq: number
+  qid: number
+  psq: number
+  short_qqq: number  // Sum of above
+  weight_in_qqq: number | null
+  spxu: number
+  sds: number
+  sh: number
+  short_spy: number  // Sum of above
+  weight_in_spy: number | null
+  sdow: number
+  dxd: number
+  dog: number
+  short_dow: number  // Sum of above
+  weight_in_dow: number | null
+  soxs: number
+  weight_in_soxx: number | null
+  sark: number
+  weight_in_sark: number | null
+  effective_short: number
+  net_weight: number
 }
 
 export async function GET(request: Request) {
   try {
     const supabase = await createClient()
-    
-    // Parse query parameters to get selected benchmark (default to SPY)
-    const { searchParams } = new URL(request.url)
-    const selectedBenchmark = searchParams.get('benchmark') || 'spy'
 
     // 1. Fetch holdings data (get most recent upload only)
     const latestDate = await getLatestHoldingsDate(supabase)
@@ -96,7 +123,17 @@ export async function GET(request: Request) {
       weight: (h.market_value / totalMarketValue) * 100
     }))
 
-    // 3. Fetch weightings data from database
+    // 3. Calculate index-based short totals (sum of all inverse ETF positions by index)
+    const indexShortTotals: IndexShortTotals = calculateIndexShortTotals(holdingsWithWeights)
+    
+    console.log('Index Short Totals:', indexShortTotals)
+    console.log(`  QQQ shorts: ${indexShortTotals.qqq.toFixed(2)}%`)
+    console.log(`  SPY shorts: ${indexShortTotals.spy.toFixed(2)}%`)
+    console.log(`  DOW shorts: ${indexShortTotals.dow.toFixed(2)}%`)
+    console.log(`  SOXX shorts: ${indexShortTotals.soxx.toFixed(2)}%`)
+    console.log(`  ARKK shorts: ${indexShortTotals.arkk.toFixed(2)}%`)
+
+    // 4. Fetch weightings data from database (includes all index columns)
     const { data: weightingsData, error: weightingsError } = await supabase
       .from('weightings')
       .select('*')
@@ -108,7 +145,7 @@ export async function GET(request: Request) {
 
     console.log(`Fetched ${weightingsData?.length || 0} weightings from database`)
 
-    // 4. Create a map of ticker -> benchmark weight
+    // 5. Create a map of ticker -> weighting data (all index columns)
     const weightingsMap = new Map<string, WeightingData>()
     if (weightingsData) {
       weightingsData.forEach((w: any) => {
@@ -116,20 +153,30 @@ export async function GET(request: Request) {
       })
     }
 
-    // 5. Calculate net weights (holding weight - benchmark weight) and shorts
+    // 6. Calculate individual inverse ETF contributions and net weight for each holding
     const netWeightRows: NetWeightRow[] = holdingsWithWeights.map(holding => {
       const weightingData = weightingsMap.get(holding.ticker.toUpperCase())
-      const benchmarkWeight = weightingData ? (weightingData[selectedBenchmark] || null) : null
-      
-      // Convert benchmark weight from decimal to percentage if it exists
-      const benchmarkWeightPercent = benchmarkWeight !== null ? benchmarkWeight * 100 : null
-      
-      const netWeight = benchmarkWeightPercent !== null 
-        ? holding.weight - benchmarkWeightPercent 
-        : null
+      const stockWeights: StockWeights = {
+        qqq: weightingData?.qqq || null,
+        spy: weightingData?.spy || null,
+        dow: weightingData?.dow || null,
+        soxx: weightingData?.soxx || null,
+        smh: weightingData?.smh || null,
+        arkk: weightingData?.arkk || null
+      }
 
-      // Calculate shorts (leverage-adjusted short exposure)
-      const shorts = calculateShorts(holding.ticker, holding.weight)
+      // Calculate individual inverse ETF contributions for this stock
+      const contributions = calculateInverseETFContributions(holdingsWithWeights, stockWeights)
+      
+      // Sum up contributions by index
+      const short_qqq = contributions.sqqq + contributions.qid + contributions.psq
+      const short_spy = contributions.spxu + contributions.sds + contributions.sh
+      const short_dow = contributions.sdow + contributions.dxd + contributions.dog
+      const short_soxx = contributions.soxs
+      const short_sark = contributions.sark
+      
+      const effectiveShort = short_qqq + short_spy + short_dow + short_soxx + short_sark
+      const netWeight = holding.weight - effectiveShort
 
       return {
         ticker: holding.ticker,
@@ -137,28 +184,56 @@ export async function GET(request: Request) {
         shares: holding.shares,
         market_value: holding.market_value,
         holding_weight: holding.weight,
-        shorts: shorts,
-        benchmark_weight: benchmarkWeightPercent,
+        // Individual inverse ETF contributions
+        sqqq: contributions.sqqq,
+        qid: contributions.qid,
+        psq: contributions.psq,
+        short_qqq,
+        weight_in_qqq: stockWeights.qqq,
+        spxu: contributions.spxu,
+        sds: contributions.sds,
+        sh: contributions.sh,
+        short_spy,
+        weight_in_spy: stockWeights.spy,
+        sdow: contributions.sdow,
+        dxd: contributions.dxd,
+        dog: contributions.dog,
+        short_dow,
+        weight_in_dow: stockWeights.dow,
+        soxs: contributions.soxs,
+        weight_in_soxx: stockWeights.soxx || stockWeights.smh,
+        sark: contributions.sark,
+        weight_in_sark: stockWeights.arkk,
+        effective_short: effectiveShort,
         net_weight: netWeight
       }
     })
 
-    // Sort by absolute net weight (largest overweight/underweight first)
+    // Sort by holding weight (largest positions first)
     const sortedRows = netWeightRows.sort((a, b) => {
-      const absA = a.net_weight !== null ? Math.abs(a.net_weight) : 0
-      const absB = b.net_weight !== null ? Math.abs(b.net_weight) : 0
-      return absB - absA
+      return b.holding_weight - a.holding_weight
     })
 
+    // Log verification for first 5 stocks
+    console.log('\n=== NET WEIGHT VERIFICATION (First 5) ===')
+    sortedRows.slice(0, 5).forEach(row => {
+      console.log(`[${row.ticker}]`)
+      console.log(`  Holding: ${row.holding_weight.toFixed(2)}%`)
+      console.log(`  SQQQ: ${row.sqqq.toFixed(4)}%, QID: ${row.qid.toFixed(4)}%, PSQ: ${row.psq.toFixed(4)}%`)
+      console.log(`  SHORT QQQs: ${row.short_qqq.toFixed(4)}%`)
+      console.log(`  Eff Short: ${row.effective_short.toFixed(4)}%`)
+      console.log(`  Net: ${row.net_weight.toFixed(2)}%`)
+    })
+    console.log('=========================================\n')
+
     console.log(`Net Weight Calculations: Calculated ${sortedRows.length} rows`)
-    console.log(`Selected benchmark: ${selectedBenchmark.toUpperCase()}`)
 
     return NextResponse.json({
       success: true,
       data: {
         date: latestDate,
-        benchmark: selectedBenchmark,
         totalMarketValue,
+        indexShortTotals,  // Include short totals for summary display
         rows: sortedRows
       },
       timestamp: new Date().toISOString()
@@ -176,4 +251,3 @@ export async function GET(request: Request) {
     )
   }
 }
-

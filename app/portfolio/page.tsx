@@ -9,48 +9,53 @@ interface NetWeightRow {
   shares: number
   market_value: number
   holding_weight: number
-  shorts: number | null
-  benchmark_weight: number | null
-  net_weight: number | null
+  // Individual inverse ETF contributions
+  sqqq: number
+  qid: number
+  psq: number
+  short_qqq: number
+  weight_in_qqq: number | null
+  spxu: number
+  sds: number
+  sh: number
+  short_spy: number
+  weight_in_spy: number | null
+  sdow: number
+  dxd: number
+  dog: number
+  short_dow: number
+  weight_in_dow: number | null
+  soxs: number
+  weight_in_soxx: number | null
+  sark: number
+  weight_in_sark: number | null
+  effective_short: number
+  net_weight: number
+}
+
+interface IndexShortTotals {
+  qqq: number
+  spy: number
+  dow: number
+  soxx: number
+  arkk: number
 }
 
 interface PortfolioData {
   date: string
-  benchmark: string
   totalMarketValue: number
+  indexShortTotals: IndexShortTotals
   rows: NetWeightRow[]
 }
-
-const BENCHMARKS = [
-  { value: 'spy', label: 'SPY (S&P 500)' },
-  { value: 'qqq', label: 'QQQ (Nasdaq 100)' },
-  { value: 'xlk', label: 'XLK (Technology)' },
-  { value: 'xlf', label: 'XLF (Financials)' },
-  { value: 'xlc', label: 'XLC (Communications)' },
-  { value: 'xly', label: 'XLY (Consumer Discretionary)' },
-  { value: 'xlp', label: 'XLP (Consumer Staples)' },
-  { value: 'xle', label: 'XLE (Energy)' },
-  { value: 'xlv', label: 'XLV (Healthcare)' },
-  { value: 'xli', label: 'XLI (Industrials)' },
-  { value: 'xlb', label: 'XLB (Materials)' },
-  { value: 'xlre', label: 'XLRE (Real Estate)' },
-  { value: 'xlu', label: 'XLU (Utilities)' },
-  { value: 'igv', label: 'IGV (Software)' },
-  { value: 'ita', label: 'ITA (Aerospace/Defense)' },
-  { value: 'soxx', label: 'SOXX (Semiconductors)' },
-  { value: 'smh', label: 'SMH (Semiconductors)' },
-  { value: 'arkk', label: 'ARKK (Innovation)' },
-]
 
 export default function NetWeightCalculationsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [selectedBenchmark, setSelectedBenchmark] = useState('spy')
 
-  // Fetch portfolio data with selected benchmark
-  const fetchPortfolioData = async (isInitialLoad: boolean = false, benchmark: string = selectedBenchmark) => {
+  // Fetch portfolio data
+  const fetchPortfolioData = async (isInitialLoad: boolean = false) => {
     try {
       if (isInitialLoad) {
         setLoading(true)
@@ -59,7 +64,7 @@ export default function NetWeightCalculationsPage() {
         setIsRefreshing(true)
       }
       
-      const response = await fetch(`/api/portfolio?benchmark=${benchmark}&t=${Date.now()}`, {
+      const response = await fetch(`/api/portfolio?t=${Date.now()}`, {
         cache: 'no-store'
       })
       
@@ -101,13 +106,6 @@ export default function NetWeightCalculationsPage() {
     return cleanup
   }, [])
 
-  // Refetch when benchmark changes
-  useEffect(() => {
-    if (!loading && portfolioData) {
-      fetchPortfolioData(false, selectedBenchmark)
-    }
-  }, [selectedBenchmark])
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -143,7 +141,7 @@ export default function NetWeightCalculationsPage() {
     )
   }
 
-  const { date, totalMarketValue, rows } = portfolioData
+  const { date, totalMarketValue, indexShortTotals, rows } = portfolioData
 
   // Format currency
   const formatCurrency = (value: number) => {
@@ -155,25 +153,19 @@ export default function NetWeightCalculationsPage() {
     }).format(value)
   }
 
-  // Format percentage
-  const formatPercent = (value: number | null, decimals: number = 2) => {
-    if (value === null) return 'N/A'
-    return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}%`
-  }
+  const formatPercent = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`
 
-  // Format decimal (for shorts column)
-  const formatDecimal = (value: number | null, decimals: number = 4) => {
-    if (value === null) return ''
-    return (value / 100).toFixed(decimals)
-  }
+  const formatShort = (value: number) => (value > 0 ? `${value.toFixed(4)}%` : '-')
 
-  // Color class for net weight
-  const getNetWeightColor = (value: number | null) => {
-    if (value === null) return 'text-slate-400'
-    if (value > 1) return 'text-green-400'
-    if (value < -1) return 'text-red-400'
+  const getNetWeightColor = (value: number) => {
+    if (value > 0) return 'text-green-400'
+    if (value < 0) return 'text-red-400'
     return 'text-slate-300'
   }
+
+  // Calculate total effective hedge (sum of all index shorts)
+  const totalEffectiveHedge = indexShortTotals.qqq + indexShortTotals.spy + 
+    indexShortTotals.dow + indexShortTotals.soxx + indexShortTotals.arkk
 
   return (
     <div className="p-6 space-y-6">
@@ -184,7 +176,7 @@ export default function NetWeightCalculationsPage() {
             Net Weight Calculations
           </h1>
           <p className="text-slate-400 mt-1">
-            Holdings vs. Benchmark Weightings • Date: {date}
+            Portfolio exposure after accounting for inverse ETF hedges • Date: {date}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -207,130 +199,180 @@ export default function NetWeightCalculationsPage() {
         </div>
       </div>
 
-      {/* Summary Card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl">
-          <p className="text-sm font-medium text-slate-400 mb-2">Total Market Value</p>
-          <p className="text-3xl font-bold text-white">{formatCurrency(totalMarketValue)}</p>
-        </div>
-        
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl">
-          <p className="text-sm font-medium text-slate-400 mb-2">Total Holdings</p>
-          <p className="text-3xl font-bold text-white">{rows.length}</p>
+      {/* Summary Cards - Portfolio Value + Index Short Totals */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        {/* Portfolio Value */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">Portfolio Value</p>
+          <p className="text-xl font-bold text-white">{formatCurrency(totalMarketValue)}</p>
         </div>
 
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl">
-          <label className="text-sm font-medium text-slate-400 block mb-2">
-            Benchmark Index
-          </label>
-          <select
-            value={selectedBenchmark}
-            onChange={(e) => setSelectedBenchmark(e.target.value)}
-            className="w-full bg-slate-700 border border-slate-600 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {BENCHMARKS.map((benchmark) => (
-              <option key={benchmark.value} value={benchmark.value}>
-                {benchmark.label}
-              </option>
-            ))}
-          </select>
+        {/* Total Effective Hedge */}
+        <div className="bg-slate-800 rounded-xl border border-orange-500/30 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">Total Hedge</p>
+          <p className="text-xl font-bold text-orange-400">{totalEffectiveHedge.toFixed(2)}%</p>
+        </div>
+        
+        {/* QQQ Shorts */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">QQQ Shorts</p>
+          <p className="text-xl font-bold text-orange-400">{indexShortTotals.qqq.toFixed(2)}%</p>
+        </div>
+
+        {/* SPY Shorts */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">SPY Shorts</p>
+          <p className="text-xl font-bold text-orange-400">{indexShortTotals.spy.toFixed(2)}%</p>
+        </div>
+
+        {/* DOW Shorts */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">DOW Shorts</p>
+          <p className="text-xl font-bold text-orange-400">{indexShortTotals.dow.toFixed(2)}%</p>
+        </div>
+
+        {/* SOXX Shorts */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">SOXX Shorts</p>
+          <p className="text-xl font-bold text-orange-400">{indexShortTotals.soxx.toFixed(2)}%</p>
+        </div>
+
+        {/* ARKK Shorts */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">ARKK Shorts</p>
+          <p className="text-xl font-bold text-orange-400">{indexShortTotals.arkk.toFixed(2)}%</p>
         </div>
       </div>
 
       {/* Net Weight Table */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-900 border-b border-slate-700">
-              <tr>
-                <th className="text-left py-4 px-4 font-semibold text-white">Ticker</th>
-                <th className="text-left py-4 px-4 font-semibold text-white">Name</th>
-                <th className="text-right py-4 px-4 font-semibold text-white">Shares</th>
-                <th className="text-right py-4 px-4 font-semibold text-white">Market Value</th>
-                <th className="text-right py-4 px-4 font-semibold text-white">Holding Wt%</th>
-                <th className="text-right py-4 px-4 font-semibold text-white">Shorts</th>
-                <th className="text-right py-4 px-4 font-semibold text-white">Benchmark Wt%</th>
-                <th className="text-right py-4 px-4 font-semibold text-white">Net Weight</th>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-x-auto">
+        <table className="min-w-full text-xs">
+          <thead className="bg-slate-900 border-b border-slate-700">
+            <tr>
+              <th className="sticky left-0 z-10 bg-slate-900 text-left py-3 px-3 font-semibold text-white border-r border-slate-700">Ticker</th>
+              <th className="text-left py-3 px-3 font-semibold text-white">Name</th>
+              <th className="text-right py-3 px-2 font-semibold text-white">Holding Wt%</th>
+              {/* QQQ Inverse ETFs */}
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">SQQQ</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">QID</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">PSQ</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 bg-orange-900/20">SHORT QQQs</th>
+              <th className="text-right py-3 px-2 font-semibold text-slate-400 text-[10px]">Wt in QQQ</th>
+              {/* SPY Inverse ETFs */}
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">SPXU</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">SDS</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">SH</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 bg-orange-900/20">SHORT SPYs</th>
+              <th className="text-right py-3 px-2 font-semibold text-slate-400 text-[10px]">Wt in SPY</th>
+              {/* DOW Inverse ETFs */}
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">SDOW</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">DXD</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">DOG</th>
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 bg-orange-900/20">Short DOW</th>
+              <th className="text-right py-3 px-2 font-semibold text-slate-400 text-[10px]">Wt in DOW</th>
+              {/* SOXS */}
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">SOXS</th>
+              <th className="text-right py-3 px-2 font-semibold text-slate-400 text-[10px]">Wt in SOXX</th>
+              {/* SARK */}
+              <th className="text-right py-3 px-2 font-semibold text-orange-400 text-[10px]">SARK</th>
+              <th className="text-right py-3 px-2 font-semibold text-slate-400 text-[10px]">Wt in SARK</th>
+              {/* Totals */}
+              <th className="text-right py-3 px-3 font-semibold text-orange-400 bg-orange-900/30">EFFECTIVE SHORT</th>
+              <th className="text-right py-3 px-3 font-semibold text-white bg-slate-800">NET</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr
+                key={row.ticker}
+                className={`border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors ${
+                  idx % 2 === 0 ? 'bg-slate-800/50' : 'bg-slate-800'
+                }`}
+              >
+                <td className="sticky left-0 z-10 bg-slate-800 py-2 px-3 font-mono font-semibold text-blue-400 border-r border-slate-700">
+                  {row.ticker}
+                </td>
+                <td className="py-2 px-3 text-slate-300 max-w-[150px] truncate">
+                  {row.name}
+                </td>
+                <td className="py-2 px-2 text-right text-white font-semibold">
+                  {row.holding_weight.toFixed(2)}%
+                </td>
+                {/* QQQ Inverse ETFs */}
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.sqqq > 0 ? row.sqqq.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.qid > 0 ? row.qid.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.psq > 0 ? row.psq.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-400 font-mono font-semibold bg-orange-900/10">
+                  {row.short_qqq > 0 ? row.short_qqq.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-slate-400 text-[10px]">
+                  {row.weight_in_qqq !== null ? row.weight_in_qqq.toFixed(2) + '%' : '-'}
+                </td>
+                {/* SPY Inverse ETFs */}
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.spxu > 0 ? row.spxu.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.sds > 0 ? row.sds.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.sh > 0 ? row.sh.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-400 font-mono font-semibold bg-orange-900/10">
+                  {row.short_spy > 0 ? row.short_spy.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-slate-400 text-[10px]">
+                  {row.weight_in_spy !== null ? row.weight_in_spy.toFixed(2) + '%' : '-'}
+                </td>
+                {/* DOW Inverse ETFs */}
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.sdow > 0 ? row.sdow.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.dxd > 0 ? row.dxd.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.dog > 0 ? row.dog.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-orange-400 font-mono font-semibold bg-orange-900/10">
+                  {row.short_dow > 0 ? row.short_dow.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-slate-400 text-[10px]">
+                  {row.weight_in_dow !== null ? row.weight_in_dow.toFixed(2) + '%' : '-'}
+                </td>
+                {/* SOXS */}
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.soxs > 0 ? row.soxs.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-slate-400 text-[10px]">
+                  {row.weight_in_soxx !== null ? row.weight_in_soxx.toFixed(2) + '%' : '-'}
+                </td>
+                {/* SARK */}
+                <td className="py-2 px-2 text-right text-orange-300 font-mono">
+                  {row.sark > 0 ? row.sark.toFixed(4) + '%' : '-'}
+                </td>
+                <td className="py-2 px-2 text-right text-slate-400 text-[10px]">
+                  {row.weight_in_sark !== null ? row.weight_in_sark.toFixed(2) + '%' : '-'}
+                </td>
+                {/* Totals */}
+                <td className="py-2 px-3 text-right text-orange-400 font-mono font-bold bg-orange-900/20">
+                  {row.effective_short > 0 ? row.effective_short.toFixed(4) + '%' : '-'}
+                </td>
+                <td className={`py-2 px-3 text-right font-bold ${getNetWeightColor(row.net_weight)} bg-slate-700/30`}>
+                  {row.net_weight.toFixed(2)}%
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => (
-                <tr
-                  key={row.ticker}
-                  className={`border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors ${
-                    idx % 2 === 0 ? 'bg-slate-800/50' : 'bg-slate-800'
-                  }`}
-                >
-                  <td className="py-3 px-4 font-mono font-semibold text-blue-400">
-                    {row.ticker}
-                  </td>
-                  <td className="py-3 px-4 text-slate-300">
-                    {row.name}
-                  </td>
-                  <td className="py-3 px-4 text-right text-slate-300 font-mono">
-                    {row.shares.toLocaleString()}
-                  </td>
-                  <td className="py-3 px-4 text-right text-slate-300 font-mono">
-                    {formatCurrency(row.market_value)}
-                  </td>
-                  <td className="py-3 px-4 text-right text-white font-semibold">
-                    {row.holding_weight.toFixed(2)}%
-                  </td>
-                  <td className="py-3 px-4 text-right text-red-400 font-mono">
-                    {formatDecimal(row.shorts)}
-                  </td>
-                  <td className="py-3 px-4 text-right text-slate-400">
-                    {row.benchmark_weight !== null ? `${row.benchmark_weight.toFixed(2)}%` : 'N/A'}
-                  </td>
-                  <td className={`py-3 px-4 text-right font-bold ${getNetWeightColor(row.net_weight)}`}>
-                    {formatPercent(row.net_weight)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       </div>
 
-      {/* Legend */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-lg">
-        <h3 className="text-sm font-semibold text-white mb-3">Legend</h3>
-        
-        {/* Net Weight Colors */}
-        <div className="mb-3">
-          <p className="text-xs font-medium text-slate-300 mb-2">Net Weight Colors:</p>
-          <div className="flex flex-wrap gap-4 text-xs text-slate-400">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-400 rounded"></div>
-              <span>Overweight (&gt;1%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-red-400 rounded"></div>
-              <span>Underweight (&lt;-1%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-slate-300 rounded"></div>
-              <span>Neutral (-1% to 1%)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-slate-400 rounded"></div>
-              <span>Not in benchmark (N/A)</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Shorts Explanation */}
-        <div>
-          <p className="text-xs font-medium text-slate-300 mb-2">Shorts Column:</p>
-          <div className="text-xs text-slate-400 space-y-1">
-            <p>• Shows leverage-adjusted short exposure for inverse ETFs (as decimal)</p>
-            <p>• 3x inverse: SPXU, SQQQ, SDOW, SOXS (holding weight × 3)</p>
-            <p>• 2x inverse: QID, SDS (holding weight × 2)</p>
-            <p>• 1x inverse: SARK, PSQ, SH (holding weight × 1)</p>
-            <p>• Blank for regular long positions</p>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }
