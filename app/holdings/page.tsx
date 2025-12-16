@@ -517,7 +517,13 @@ export default function HoldingsPage() {
     }
   }
 
-  const sortedHoldings = [...holdings].sort((a, b) => {
+  // Filter out FGXXX and Cash from visible rows (but keep in totals)
+  const visibleHoldings = holdings.filter(h => {
+    const ticker = h.stock_ticker.toUpperCase()
+    return !ticker.includes('CASH') && ticker !== 'FGXXX'
+  })
+
+  const sortedHoldings = [...visibleHoldings].sort((a, b) => {
     const aVal = a[sortColumn]
     const bVal = b[sortColumn]
     
@@ -628,52 +634,126 @@ export default function HoldingsPage() {
         </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">Portfolio Return Today</p>
-          <p className={`text-2xl font-bold ${portfolioReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+      {/* Summary Cards - Reduced size by ~25% */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-9 gap-3">
+        {/* Total Market Value */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Total Market Value</p>
+          <p className="text-lg font-bold text-white">
+            ${holdings.reduce((sum, h) => sum + h.calculated_market_value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </p>
+        </div>
+
+        {/* Total Holdings */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Total Holdings</p>
+          <p className="text-lg font-bold text-white">
+            {holdings.length}
+          </p>
+        </div>
+
+        {/* Portfolio Return Today */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Portfolio Return Today</p>
+          <p className={`text-lg font-bold ${portfolioReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {portfolioReturn >= 0 ? '+' : ''}{portfolioReturn.toFixed(2)}%
           </p>
         </div>
         
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">QQQ Return Today</p>
-          <p className={`text-2xl font-bold ${qqqReturn && qqqReturn.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        {/* QQQ Return Today */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">QQQ Return Today</p>
+          <p className={`text-lg font-bold ${qqqReturn && qqqReturn.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {qqqReturn ? `${qqqReturn.dailyReturn >= 0 ? '+' : ''}${qqqReturn.dailyReturn.toFixed(2)}%` : '-'}
           </p>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">S&P 500 Return Today</p>
-          <p className={`text-2xl font-bold ${spyReturn && spyReturn.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        {/* S&P 500 Return Today */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">S&P 500 Return Today</p>
+          <p className={`text-lg font-bold ${spyReturn && spyReturn.dailyReturn >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {spyReturn ? `${spyReturn.dailyReturn >= 0 ? '+' : ''}${spyReturn.dailyReturn.toFixed(2)}%` : '-'}
           </p>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">Effective Hedge</p>
-          <p className="text-2xl font-bold text-orange-400">
-            {(effectiveHedge / 100).toFixed(4)}
+        {/* Effective Hedge - Changed to % format */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Effective Hedge</p>
+          <p className="text-lg font-bold text-orange-400">
+            {effectiveHedge.toFixed(1)}%
           </p>
         </div>
 
-        <div className="bg-slate-800 rounded-lg border border-slate-700 p-4 shadow-lg">
-          <p className="text-sm text-slate-400 mb-1">Total Cash</p>
-          <p className="text-2xl font-bold text-white">
+        {/* Total Cash */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Total Cash</p>
+          <p className="text-lg font-bold text-white">
             {totalCash.toFixed(2)}%
+          </p>
+        </div>
+
+        {/* Portfolio Beta - True Beta */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">True Beta</p>
+          <p className="text-lg font-bold text-blue-400">
+            -
+          </p>
+        </div>
+
+        {/* Portfolio Beta - 5yr */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Beta 5yr</p>
+          <p className="text-lg font-bold text-blue-400">
+            {(() => {
+              const totalWeight = holdings.reduce((sum, h) => sum + h.calculated_weight, 0)
+              const weightedBeta = holdings.reduce((sum, h) => {
+                const beta = h.beta_5y || 0
+                return sum + (beta * h.calculated_weight / 100)
+              }, 0)
+              return totalWeight > 0 ? weightedBeta.toFixed(2) : '-'
+            })()}
+          </p>
+        </div>
+
+        {/* Portfolio Beta - 3yr */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Beta 3yr</p>
+          <p className="text-lg font-bold text-blue-400">
+            {(() => {
+              const totalWeight = holdings.reduce((sum, h) => sum + h.calculated_weight, 0)
+              const weightedBeta = holdings.reduce((sum, h) => {
+                const beta = h.beta_3y || 0
+                return sum + (beta * h.calculated_weight / 100)
+              }, 0)
+              return totalWeight > 0 ? weightedBeta.toFixed(2) : '-'
+            })()}
+          </p>
+        </div>
+
+        {/* Portfolio Beta - 1yr */}
+        <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
+          <p className="text-xs text-slate-400 mb-0.5">Beta 1yr</p>
+          <p className="text-lg font-bold text-blue-400">
+            {(() => {
+              const totalWeight = holdings.reduce((sum, h) => sum + h.calculated_weight, 0)
+              const weightedBeta = holdings.reduce((sum, h) => {
+                const beta = h.beta_1y || 0
+                return sum + (beta * h.calculated_weight / 100)
+              }, 0)
+              return totalWeight > 0 ? weightedBeta.toFixed(2) : '-'
+            })()}
           </p>
         </div>
       </div>
 
-      {/* Holdings Table */}
-      <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden shadow-xl">
+      {/* Holdings Table with Sticky Header */}
+      <div className="bg-slate-800 rounded-lg border border-slate-700 shadow-xl" style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-slate-700 border-b border-slate-600">
+            <thead className="bg-slate-700 border-b border-slate-600 sticky top-0 z-10">
               <tr>
                 {/* 1. Ticker */}
-                <th className="px-4 py-3 text-left">
+                <th className="px-3 py-2 text-left">
                   <button
                     onClick={() => handleSort('stock_ticker')}
                     className="flex items-center gap-1 text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
@@ -685,11 +765,11 @@ export default function HoldingsPage() {
                   </button>
                 </th>
                 {/* 2. Name */}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                <th className="px-3 py-2 text-left text-xs font-semibold text-white uppercase tracking-wider">
                   Name
                 </th>
                 {/* 3. Weight */}
-                <th className="px-4 py-3 text-right">
+                <th className="px-3 py-2 text-right">
                   <button
                     onClick={() => handleSort('calculated_weight')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
@@ -700,20 +780,16 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 4. Shares */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('shares')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    Shares
-                    {sortColumn === 'shares' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
+                {/* 4. Net Weight (placeholder) */}
+                <th className="px-3 py-2 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                  Net Wt
                 </th>
-                {/* 5. Current Price */}
-                <th className="px-4 py-3 text-right">
+                {/* 5. Target Weight (placeholder) */}
+                <th className="px-3 py-2 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                  Tgt Wt
+                </th>
+                {/* 6. Price */}
+                <th className="px-3 py-2 text-right">
                   <button
                     onClick={() => handleSort('current_price')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
@@ -724,20 +800,8 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 6. Market Value */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('calculated_market_value')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    Mkt Value
-                    {sortColumn === 'calculated_market_value' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
                 {/* 7. % Change */}
-                <th className="px-4 py-3 text-right">
+                <th className="px-3 py-2 text-right">
                   <button
                     onClick={() => handleSort('calculated_pct_change')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
@@ -748,8 +812,8 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 8. Basis Point Contribution */}
-                <th className="px-4 py-3 text-right">
+                {/* 8. BP Contribution */}
+                <th className="px-3 py-2 text-right">
                   <button
                     onClick={() => handleSort('basis_point_contribution')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
@@ -760,88 +824,8 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 9. Beta 1Y */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('beta_1y')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    Beta 1Y
-                    {sortColumn === 'beta_1y' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                {/* 10. Beta 3Y */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('beta_3y')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    Beta 3Y
-                    {sortColumn === 'beta_3y' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                {/* 11. Beta 5Y */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('beta_5y')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    Beta 5Y
-                    {sortColumn === 'beta_5y' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                {/* 12. True Beta */}
-                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
-                  True Beta
-                </th>
-                {/* 13. QQQ Ratio */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('index_ratio')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    QQQ Ratio
-                    {sortColumn === 'index_ratio' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                {/* 14. QQQ Weight */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('qqq_weight')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    QQQ Wt
-                    {sortColumn === 'qqq_weight' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                {/* 15. S&P Weight */}
-                <th className="px-4 py-3 text-right">
-                  <button
-                    onClick={() => handleSort('sp_weight')}
-                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
-                  >
-                    S&P Wt
-                    {sortColumn === 'sp_weight' && (
-                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                    )}
-                  </button>
-                </th>
-                {/* 16. Net Weight (placeholder) */}
-                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
-                  Net Wt
-                </th>
-                {/* 17. Target Price */}
-                <th className="px-4 py-3 text-right">
+                {/* 9. Target Price */}
+                <th className="px-3 py-2 text-right">
                   <button
                     onClick={() => handleSort('target_price')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
@@ -852,8 +836,8 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 18. Upside */}
-                <th className="px-4 py-3 text-right">
+                {/* 10. Upside */}
+                <th className="px-3 py-2 text-right">
                   <button
                     onClick={() => handleSort('upside')}
                     className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
@@ -864,17 +848,93 @@ export default function HoldingsPage() {
                     )}
                   </button>
                 </th>
-                {/* 19. Score (placeholder) */}
-                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                {/* 11. Score (placeholder) */}
+                <th className="px-3 py-2 text-right text-xs font-semibold text-white uppercase tracking-wider">
                   Score
                 </th>
-                {/* 20. Target Weight (placeholder) */}
-                <th className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider">
-                  Tgt Wt
+                {/* 12. QQQ Ratio */}
+                <th className="px-3 py-2 text-right">
+                  <button
+                    onClick={() => handleSort('index_ratio')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    QQQ Ratio
+                    {sortColumn === 'index_ratio' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
                 </th>
-                {/* 21. Earnings Date */}
-                <th className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider">
-                  Earnings
+                {/* 13. QQQ Weight */}
+                <th className="px-3 py-2 text-right">
+                  <button
+                    onClick={() => handleSort('qqq_weight')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    QQQ Wt
+                    {sortColumn === 'qqq_weight' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 14. SP500 Weight */}
+                <th className="px-3 py-2 text-right">
+                  <button
+                    onClick={() => handleSort('sp_weight')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    SP500 Wt
+                    {sortColumn === 'sp_weight' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 15. True Beta */}
+                <th className="px-3 py-2 text-right text-xs font-semibold text-white uppercase tracking-wider">
+                  True Beta
+                </th>
+                {/* 16. Beta 1 */}
+                <th className="px-3 py-2 text-right">
+                  <button
+                    onClick={() => handleSort('beta_1y')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Beta 1
+                    {sortColumn === 'beta_1y' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 17. Beta 3 */}
+                <th className="px-3 py-2 text-right">
+                  <button
+                    onClick={() => handleSort('beta_3y')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Beta 3
+                    {sortColumn === 'beta_3y' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 18. Beta 5 */}
+                <th className="px-3 py-2 text-right">
+                  <button
+                    onClick={() => handleSort('beta_5y')}
+                    className="flex items-center gap-1 ml-auto text-xs font-semibold text-white uppercase tracking-wider hover:text-blue-400"
+                  >
+                    Beta 5
+                    {sortColumn === 'beta_5y' && (
+                      <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
+                    )}
+                  </button>
+                </th>
+                {/* 19. Earnings Date */}
+                <th className="px-3 py-2 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                  Earnings Date
+                </th>
+                {/* 20. Earnings Time */}
+                <th className="px-3 py-2 text-left text-xs font-semibold text-white uppercase tracking-wider">
+                  Earnings Time
                 </th>
               </tr>
             </thead>
@@ -882,96 +942,103 @@ export default function HoldingsPage() {
               {sortedHoldings.map((holding) => (
                 <tr key={holding.stock_ticker} className="hover:bg-slate-700/50 transition-colors">
                   {/* 1. Ticker */}
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2">
                     <span className="text-sm font-medium text-white">{holding.stock_ticker}</span>
                   </td>
                   {/* 2. Name */}
-                  <td className="px-4 py-3 text-sm text-slate-300 max-w-[200px] truncate">
+                  <td className="px-3 py-2 text-sm text-slate-300 max-w-[200px] truncate">
                     {holding.security_name}
                   </td>
-                  {/* 3. Weight (calculated) - 1 decimal place */}
-                  <td className="px-4 py-3 text-right text-sm font-medium text-white">
+                  {/* 3. Weight */}
+                  <td className="px-3 py-2 text-right text-sm font-medium text-white">
                     {holding.calculated_weight.toFixed(1)}%
                   </td>
-                  {/* 4. Shares */}
-                  <td className="px-4 py-3 text-right text-sm text-slate-300">
-                    {holding.shares.toLocaleString()}
+                  {/* 4. Net Weight (placeholder) */}
+                  <td className="px-3 py-2 text-right text-sm text-slate-500">
+                    -
                   </td>
-                  {/* 5. Current Price (use close_price as fallback) */}
-                  <td className="px-4 py-3 text-right text-sm text-white">
+                  {/* 5. Target Weight (placeholder) */}
+                  <td className="px-3 py-2 text-right text-sm text-slate-500">
+                    -
+                  </td>
+                  {/* 6. Price */}
+                  <td className="px-3 py-2 text-right text-sm text-white">
                     ${(holding.current_price || holding.close_price).toFixed(2)}
                   </td>
-                  {/* 6. Market Value (calculated) */}
-                  <td className="px-4 py-3 text-right text-sm text-slate-300">
-                    ${holding.calculated_market_value.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </td>
-                  {/* 7. % Change (calculated) */}
-                  <td className={`px-4 py-3 text-right text-sm font-medium ${holding.calculated_pct_change > 0 ? 'text-green-400' : holding.calculated_pct_change < 0 ? 'text-red-400' : 'text-slate-300'}`}>
+                  {/* 7. % Change */}
+                  <td className={`px-3 py-2 text-right text-sm font-medium ${holding.calculated_pct_change > 0 ? 'text-green-400' : holding.calculated_pct_change < 0 ? 'text-red-400' : 'text-slate-300'}`}>
                     {holding.current_price ? (
                       `${holding.calculated_pct_change >= 0 ? '+' : ''}${holding.calculated_pct_change.toFixed(2)}%`
                     ) : (
                       <span className="text-slate-500">-</span>
                     )}
                   </td>
-                  {/* 8. Basis Point Contribution */}
-                  <td className={`px-4 py-3 text-right text-sm font-medium ${holding.basis_point_contribution > 0 ? 'text-green-400' : holding.basis_point_contribution < 0 ? 'text-red-400' : 'text-slate-300'}`}>
+                  {/* 8. BP Contribution */}
+                  <td className={`px-3 py-2 text-right text-sm font-medium ${holding.basis_point_contribution > 0 ? 'text-green-400' : holding.basis_point_contribution < 0 ? 'text-red-400' : 'text-slate-300'}`}>
                     {holding.current_price ? (
                       `${holding.basis_point_contribution >= 0 ? '+' : ''}${(holding.basis_point_contribution * 100).toFixed(0)}`
                     ) : (
                       <span className="text-slate-500">-</span>
                     )}
                   </td>
-                  {/* 9. Beta 1Y */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.beta_1y ? 'text-slate-300' : 'text-slate-500'}`}>
-                    {holding.beta_1y ? holding.beta_1y.toFixed(2) : '-'}
-                  </td>
-                  {/* 10. Beta 3Y */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.beta_3y ? 'text-slate-300' : 'text-slate-500'}`}>
-                    {holding.beta_3y ? holding.beta_3y.toFixed(2) : '-'}
-                  </td>
-                  {/* 11. Beta 5Y */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.beta_5y ? 'text-slate-300' : 'text-slate-500'}`}>
-                    {holding.beta_5y ? holding.beta_5y.toFixed(2) : '-'}
-                  </td>
-                  {/* 12. True Beta (placeholder) */}
-                  <td className="px-4 py-3 text-right text-sm text-slate-500">
-                    -
-                  </td>
-                  {/* 13. QQQ Ratio (Portfolio Weight / QQQ Weight) - formatted as % */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.index_ratio ? 'text-slate-300' : 'text-slate-500'}`}>
-                    {holding.index_ratio ? `${(holding.index_ratio * 100).toFixed(0)}%` : '-'}
-                  </td>
-                  {/* 14. QQQ Weight (from weightings table) - 1 decimal place */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.qqq_weight ? 'text-slate-300' : 'text-slate-500'}`}>
-                    {holding.qqq_weight ? `${holding.qqq_weight.toFixed(1)}%` : '-'}
-                  </td>
-                  {/* 15. S&P Weight (from weightings table) - 1 decimal place */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.sp_weight ? 'text-slate-300' : 'text-slate-500'}`}>
-                    {holding.sp_weight ? `${holding.sp_weight.toFixed(1)}%` : '-'}
-                  </td>
-                  {/* 16. Net Weight (placeholder) */}
-                  <td className="px-4 py-3 text-right text-sm text-slate-500">
-                    -
-                  </td>
-                  {/* 17. Target Price */}
-                  <td className={`px-4 py-3 text-right text-sm ${holding.target_price ? 'text-slate-300' : 'text-slate-500'}`}>
+                  {/* 9. Target Price */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.target_price ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.target_price ? `$${holding.target_price.toFixed(2)}` : '-'}
                   </td>
-                  {/* 18. Upside */}
-                  <td className={`px-4 py-3 text-right text-sm font-medium ${holding.upside && holding.upside > 0 ? 'text-green-400' : holding.upside && holding.upside < 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                  {/* 10. Upside */}
+                  <td className={`px-3 py-2 text-right text-sm font-medium ${holding.upside && holding.upside > 0 ? 'text-green-400' : holding.upside && holding.upside < 0 ? 'text-red-400' : 'text-slate-500'}`}>
                     {holding.upside !== null && holding.upside !== undefined ? `${holding.upside >= 0 ? '+' : ''}${holding.upside.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 19. Score (placeholder) */}
-                  <td className="px-4 py-3 text-right text-sm text-slate-500">
+                  {/* 11. Score (placeholder) */}
+                  <td className="px-3 py-2 text-right text-sm text-slate-500">
                     -
                   </td>
-                  {/* 20. Target Weight (placeholder) */}
-                  <td className="px-4 py-3 text-right text-sm text-slate-500">
+                  {/* 12. QQQ Ratio */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.index_ratio ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.index_ratio ? `${(holding.index_ratio * 100).toFixed(0)}%` : '-'}
+                  </td>
+                  {/* 13. QQQ Weight */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.qqq_weight ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.qqq_weight ? `${holding.qqq_weight.toFixed(1)}%` : '-'}
+                  </td>
+                  {/* 14. SP500 Weight */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.sp_weight ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.sp_weight ? `${holding.sp_weight.toFixed(1)}%` : '-'}
+                  </td>
+                  {/* 15. True Beta (placeholder) */}
+                  <td className="px-3 py-2 text-right text-sm text-slate-500">
                     -
                   </td>
-                  {/* 21. Earnings Date */}
-                  <td className="px-4 py-3 text-sm text-slate-500">
-                    {holding.earnings_date || '-'}
+                  {/* 16. Beta 1 */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.beta_1y ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.beta_1y ? holding.beta_1y.toFixed(2) : '-'}
+                  </td>
+                  {/* 17. Beta 3 */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.beta_3y ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.beta_3y ? holding.beta_3y.toFixed(2) : '-'}
+                  </td>
+                  {/* 18. Beta 5 */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.beta_5y ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.beta_5y ? holding.beta_5y.toFixed(2) : '-'}
+                  </td>
+                  {/* 19. Earnings Date */}
+                  <td className="px-3 py-2 text-sm text-slate-500">
+                    {holding.earnings_date ? (() => {
+                      const dateStr = String(holding.earnings_date)
+                      // Check if it's an Excel serial number (numeric string like "46002.000")
+                      if (/^\d+(\.\d+)?$/.test(dateStr)) {
+                        const excelEpoch = new Date(1899, 11, 30) // Excel epoch
+                        const serialNumber = parseFloat(dateStr)
+                        const date = new Date(excelEpoch.getTime() + serialNumber * 86400000)
+                        return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })
+                      }
+                      // Otherwise, just display as-is (already formatted)
+                      return dateStr
+                    })() : '-'}
+                  </td>
+                  {/* 20. Earnings Time */}
+                  <td className="px-3 py-2 text-sm text-slate-500">
+                    {holding.earnings_time || '-'}
                   </td>
                 </tr>
               ))}
