@@ -197,10 +197,11 @@ export default function HoldingsPage() {
         factsetData?.map(f => {
           const ticker = (f.Ticker || f.TICKER || '').trim().toUpperCase()
           return [ticker, { 
-            beta_1y: f['BETA 1Y'] ? parseFloat(f['BETA 1Y']) : null,
-            beta_3y: f['BETA 3Y'] ? parseFloat(f['BETA 3Y']) : null,
-            beta_5y: f['5 yr beta'] ? parseFloat(f['5 yr beta']) : null,
-            earnings_date: f['Next Earnings Date'] || null
+            beta_1y: f['1 yr Beta'] ? parseFloat(f['1 yr Beta']) : null,
+            beta_3y: f['3 yr beta'] ? parseFloat(f['3 yr beta']) : null,
+            beta_5y: f['5 yr beta - monthly'] ? parseFloat(f['5 yr beta - monthly']) : null,
+            earnings_date: f['Next Earnings Date'] || null,
+            earnings_time: f['Next Earnings Date Time of day'] || null
           }]
         }) || []
       )
@@ -386,13 +387,14 @@ export default function HoldingsPage() {
           sp_weight: spyWeight,
           qqq_weight: qqqWeight,
           index_ratio: indexRatio,
-          // Beta values from factset_data
+          // Beta values from factset_data_v2
           beta_1y: factset?.beta_1y || null,
           beta_3y: factset?.beta_3y || null,
           beta_5y: factset?.beta_5y || null,
           true_beta: null, // TBD - placeholder
-          // Earnings date from factset_data
+          // Earnings date and time from factset_data_v2
           earnings_date: factset?.earnings_date || h.earnings_date,
+          earnings_time: factset?.earnings_time || h.earnings_time,
           // Target price from tgt_prices
           target_price: targetPrice || null,
           // Placeholder fields

@@ -36,3 +36,4 @@ This page shows true net exposure after accounting for inverse ETF hedges. Data 
 - SOXS applies semiconductor weight; SARK applies ARKK weight.
 - All portfolio inverse positions are multiplied by their leverage (3x/2x/1x) before applying the stock's index weight.
 
+

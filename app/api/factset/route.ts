@@ -1,4 +1,4 @@
-// FactSet Data API Route
+// FactSet Data API Route - Updated for factset_data_v2
 import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/app/utils/supabase/service-role'
 
@@ -7,20 +7,20 @@ export const runtime = 'nodejs'
 
 export async function GET() {
   try {
-    console.log('Fetching factset_data...')
+    console.log('Fetching factset_data_v2...')
     const supabase = createServiceRoleClient()
 
-    // Fetch all factset data (bypasses RLS with service role key)
+    // Fetch from new factset_data_v2 table with updated column names
     const { data, error } = await supabase
-      .from('factset_data')
-      .select('"Ticker", "BETA 1Y", "BETA 3Y", "5 yr beta", "Next Earnings Date"')
+      .from('factset_data_v2')
+      .select('"Ticker", "1 yr Beta", "3 yr beta", "5 yr beta - monthly", "Next Earnings Date", "Next Earnings Date Time of day"')
 
     if (error) {
       console.error('FactSet API error:', error)
       throw error
     }
 
-    console.log(`FactSet API: Loaded ${data?.length || 0} records`)
+    console.log(`FactSet API: Loaded ${data?.length || 0} records from factset_data_v2`)
 
     return NextResponse.json({
       success: true,
@@ -40,6 +40,7 @@ export async function GET() {
     )
   }
 }
+
 
 
 
