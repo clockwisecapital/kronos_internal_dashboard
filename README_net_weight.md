@@ -37,3 +37,4 @@ This page shows true net exposure after accounting for inverse ETF hedges. Data 
 - All portfolio inverse positions are multiplied by their leverage (3x/2x/1x) before applying the stock's index weight.
 
 
+
