@@ -83,57 +83,58 @@ These are the columns currently being used in the application:
 55. **Accruals abs** - Absolute accruals
 56. **acrcrurals %** - Accruals percentage
 57. **FCF** - Free cash flow
+58. **Consensus Price Target** - Analyst consensus target price
 
-### Company Information (Columns 58-65)
-58. **Next Earnings Date** - ⭐ USED - Upcoming earnings date
-59. **Next Earnings Date Time of day** - ⭐ USED - Earnings time (BMO/AMC/Unspecified)
-60. **LAST Reported FYE** - Last reported fiscal year end
-61. **FYE** - Fiscal year end
-62. **LAST Reported FQ** - Last reported fiscal quarter
-63. **Total assets** - Total assets
-64. **1 month volatility** - 1-month volatility
-65. **2 month vol** - 2-month volatility
+### Company Information (Columns 59-65)
+59. **Next Earnings Date** - ⭐ USED - Upcoming earnings date
+60. **Next Earnings Date Time of day** - ⭐ USED - Earnings time (BMO/AMC/Unspecified)
+61. **LAST Reported FYE** - Last reported fiscal year end
+62. **FYE** - Fiscal year end
+63. **LAST Reported FQ** - Last reported fiscal quarter
+64. **Total assets** - Total assets
+65. **1 month volatility** - 1-month volatility
+66. **2 month vol** - 2-month volatility
 
-### Risk Metrics (Columns 66-71)
-66. **3 month vol** - 3-month volatility
-67. **1 yr Beta** - ⭐ USED - 1-year beta
-68. **3 yr beta** - ⭐ USED - 3-year beta
-69. **5 yr beta - monthly** - ⭐ USED - 5-year beta (monthly)
-70. **5 yr beta - weekly** - 5-year beta (weekly)
+### Risk Metrics (Columns 67-71)
+67. **3 month vol** - 3-month volatility
+68. **1 yr Beta** - ⭐ USED - 1-year beta
+69. **3 yr beta** - ⭐ USED - 3-year beta
+70. **5 yr beta - monthly** - ⭐ USED - 5-year beta (monthly)
+71. **5 yr beta - weekly** - 5-year beta (weekly)
 
-### Valuation Multiples - NTM (Columns 71-84)
-71. **EV/EBITDA - NTM** - EV to EBITDA, next twelve months
-72. **EV/Sales - NTM** - EV to Sales, next twelve months
-73. **P/E NTM** - Price to earnings, next twelve months
-74. **3-YR AVG NTM EV/EBITDA** - 3-year average EV/EBITDA
-75. **3-YR AVG NTM EV/SALES** - 3-year average EV/Sales
-76. **3-YR AVG NTM P/E** - 3-year average P/E
-77. **3-YR MEDIAN NTM EV/EBITDA** - 3-year median EV/EBITDA
-78. **3-YR MEDIAN NTM EV/SALES** - 3-year median EV/Sales
-79. **3-YR MEDIAN NTM P/E** - 3-year median P/E
-80. **3-YR MIN NTM EV/EBITDA** - 3-year minimum EV/EBITDA
-81. **3-YR MIN NTM EV/SALES** - 3-year minimum EV/Sales
-82. **3-YR MIN NTM P/E** - 3-year minimum P/E
-83. **3-YR MAX NTM EV/EBITDA** - 3-year maximum EV/EBITDA
-84. **3-YR MAX NTM EV/SALES** - 3-year maximum EV/Sales
+### Valuation Multiples - NTM (Columns 72-85)
+72. **EV/EBITDA - NTM** - EV to EBITDA, next twelve months
+73. **EV/Sales - NTM** - EV to Sales, next twelve months
+74. **P/E NTM** - Price to earnings, next twelve months
+75. **3-YR AVG NTM EV/EBITDA** - 3-year average EV/EBITDA
+76. **3-YR AVG NTM EV/SALES** - 3-year average EV/Sales
+77. **3-YR AVG NTM P/E** - 3-year average P/E
+78. **3-YR MEDIAN NTM EV/EBITDA** - 3-year median EV/EBITDA
+79. **3-YR MEDIAN NTM EV/SALES** - 3-year median EV/Sales
+80. **3-YR MEDIAN NTM P/E** - 3-year median P/E
+81. **3-YR MIN NTM EV/EBITDA** - 3-year minimum EV/EBITDA
+82. **3-YR MIN NTM EV/SALES** - 3-year minimum EV/Sales
+83. **3-YR MIN NTM P/E** - 3-year minimum P/E
+84. **3-YR MAX NTM EV/EBITDA** - 3-year maximum EV/EBITDA
+85. **3-YR MAX NTM EV/SALES** - 3-year maximum EV/Sales
 
-### Historical Valuation Metrics (Columns 85-102)
-85. **3-YR MAX NTM P/E** - 3-year maximum P/E
-86. **52 week high** - 52-week high price
-87. **26-YR AVG NTM EV/EBITDA** - 26-year average EV/EBITDA
-88. **26-YR AVG NTM EV/SALES** - 26-year average EV/Sales
-89. **26-YR AVG NTM P/E** - 26-year average P/E
-90. **26-YR MEDIAN NTM EV/EBITDA** - 26-year median EV/EBITDA
-91. **26-YR MEDIAN NTM EV/SALES** - 26-year median EV/Sales
-92. **26-YR MEDIAN NTM P/E** - 26-year median P/E
-93. **26-YR MIN NTM EV/EBITDA** - 26-year minimum EV/EBITDA
-94. **26-YR MIN NTM EV/SALES** - 26-year minimum EV/Sales
-95. **26-YR MIN NTM P/E** - 26-year minimum P/E
-96. **26-YR MAX NTM EV/EBITDA** - 26-year maximum EV/EBITDA
-97. **26-YR MAX NTM EV/SALES** - 26-year maximum EV/Sales
-98. **26-YR MAX NTM P/E** - 26-year maximum P/E
+### Historical Valuation Metrics (Columns 86-99)
+86. **3-YR MAX NTM P/E** - 3-year maximum P/E
+87. **52 week high** - 52-week high price
+88. **26-YR AVG NTM EV/EBITDA** - 26-year average EV/EBITDA
+89. **26-YR AVG NTM EV/SALES** - 26-year average EV/Sales
+90. **26-YR AVG NTM P/E** - 26-year average P/E
+91. **26-YR MEDIAN NTM EV/EBITDA** - 26-year median EV/EBITDA
+92. **26-YR MEDIAN NTM EV/SALES** - 26-year median EV/Sales
+93. **26-YR MEDIAN NTM P/E** - 26-year median P/E
+94. **26-YR MIN NTM EV/EBITDA** - 26-year minimum EV/EBITDA
+95. **26-YR MIN NTM EV/SALES** - 26-year minimum EV/Sales
+96. **26-YR MIN NTM P/E** - 26-year minimum P/E
+97. **26-YR MAX NTM EV/EBITDA** - 26-year maximum EV/EBITDA
+98. **26-YR MAX NTM EV/SALES** - 26-year maximum EV/Sales
+99. **26-YR MAX NTM P/E** - 26-year maximum P/E
 
-*Note: Columns 99-102 appear to be empty/reserved in the current dataset*
+*Note: Columns 100-102 appear to be empty/reserved in the current dataset*
 
 ## API Integration
 

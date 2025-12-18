@@ -1,0 +1,51 @@
+VALUE,
+Metric,Weight
+P/E,0.20
+EV/EBITDA,0.20
+EV/Sales,0.20
+TGT PRICE,0.40
+,
+MOMENTUM,
+12M Return ex 1M,0.3
+3M Return,0.1
+52-Week High %,0.1
+EPS Surprise,0.1
+Rev Surprise,0.1
+NTM EPS Change,0.15
+NTM Rev Change,0.15
+,
+QUALITY,
+ROIC TTM,0.25
+Gross Profitability,0.25
+Accruals,0.2
+FCF,0.1
+ROIC 3-Yr,0.1
+EBITDA Margin,0.1
+,
+RISK,
+Beta 3-Yr,0.25
+30-Day Volatility,0.3
+Max Drawdown,0.2
+Financial Leverage,0.25
+,
+,
+,BASE
+Total scoring,weight
+Value,0.4
+Momentum,0.3
+Quality,0.15
+Risk,0.15
+,
+,CAUTIOUS
+Total scoring,weight
+Value,0.4
+Momentum,0.1
+Quality,0.25
+Risk,0.25
+,
+,AGGRESIVE
+Total scoring,weight
+Value,0.4
+Momentum,0.5
+Quality,0.05
+Risk,0.05

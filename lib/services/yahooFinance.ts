@@ -365,3 +365,90 @@ export async function fetchPriceEndOfLastYear(ticker: string): Promise<number | 
     return null
   }
 }
+
+/**
+ * Calculate maximum drawdown over last 252 trading days (52 weeks)
+ * Returns the worst peak-to-trough decline as a negative percentage
+ */
+export async function calculateMaxDrawdown(ticker: string, tradingDays: number = 252): Promise<number | null> {
+  try {
+    // Fetch 2 years of data to ensure we have at least 252 trading days
+    const historicalData = await fetchHistoricalData(ticker, '2y')
+    
+    if (!historicalData || !historicalData.timestamp || !historicalData.indicators?.quote?.[0]?.close) {
+      return null
+    }
+    
+    const closes = (historicalData.indicators.quote[0].close as number[])
+      .filter((price: number | null) => price !== null && price !== undefined) as number[]
+    
+    if (closes.length === 0) {
+      return null
+    }
+    
+    // Take last N trading days
+    const prices = closes.slice(-Math.min(tradingDays, closes.length))
+    
+    if (prices.length < 2) {
+      return null
+    }
+    
+    // Calculate running peak (cumulative maximum)
+    let runningPeak = prices[0]
+    let maxDrawdown = 0
+    
+    for (let i = 1; i < prices.length; i++) {
+      runningPeak = Math.max(runningPeak, prices[i])
+      const drawdown = (prices[i] / runningPeak) - 1.0 // Negative value
+      maxDrawdown = Math.min(maxDrawdown, drawdown) // Most negative
+    }
+    
+    return maxDrawdown
+  } catch (error) {
+    console.error(`Error calculating max drawdown for ${ticker}:`, error)
+    return null
+  }
+}
+
+/**
+ * Fetch comprehensive historical price data for scoring calculations
+ * Returns current price, prices from 30/90/365 days ago, and max drawdown
+ */
+export async function fetchHistoricalPricesForScoring(ticker: string): Promise<{
+  currentPrice: number
+  price30DaysAgo: number | null
+  price90DaysAgo: number | null
+  price365DaysAgo: number | null
+  maxDrawdown: number | null
+}> {
+  try {
+    // Fetch current price
+    const currentQuote = await fetchQuote(ticker)
+    const currentPrice = currentQuote?.currentPrice || 0
+    
+    // Fetch historical prices in parallel
+    const [price30, price90, price365, maxDD] = await Promise.all([
+      fetchPriceNDaysAgo(ticker, 30),
+      fetchPriceNDaysAgo(ticker, 90),
+      fetchPriceNDaysAgo(ticker, 365),
+      calculateMaxDrawdown(ticker, 252)
+    ])
+    
+    return {
+      currentPrice,
+      price30DaysAgo: price30,
+      price90DaysAgo: price90,
+      price365DaysAgo: price365,
+      maxDrawdown: maxDD
+    }
+  } catch (error) {
+    console.error(`Error fetching historical prices for scoring for ${ticker}:`, error)
+    return {
+      currentPrice: 0,
+      price30DaysAgo: null,
+      price90DaysAgo: null,
+      price365DaysAgo: null,
+      maxDrawdown: null
+    }
+  }
+}

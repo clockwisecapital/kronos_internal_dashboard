@@ -21,12 +21,8 @@ interface SectorValuation {
   ev_sales_max: number | null
 }
 
-type ValuationTab = 'pe' | 'ev_ebitda' | 'ev_sales'
-
 export default function SectorsPage() {
-  const [selectedSector, setSelectedSector] = useState('SMH')
-  const [selectedValuationTab, setSelectedValuationTab] = useState<ValuationTab>('pe')
-  const [selectedHoldingsTab, setSelectedHoldingsTab] = useState<ValuationTab>('pe')
+  const [selectedSector, setSelectedSector] = useState('SPY')
   const [sectorValuations, setSectorValuations] = useState<SectorValuation[]>([])
   const [holdingsValuations, setHoldingsValuations] = useState<SectorValuation[]>([])
   const [loading, setLoading] = useState(true)
@@ -163,115 +159,106 @@ export default function SectorsPage() {
     <div className="p-6 space-y-6">
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
+        <h1 className="text-3xl font-bold text-white">
           Sector Analysis
         </h1>
-        <p className="text-zinc-600 dark:text-zinc-400 mt-1">
+        <p className="text-slate-400 mt-1">
           Sector-level valuations and holdings breakdown
         </p>
       </div>
 
-      {/* Sector Valuations with Tabs */}
+      {/* Sector Valuations - All Metrics in One Table */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
         <div className="p-6 border-b border-slate-700">
           <h2 className="text-lg font-semibold text-white">
             Sector Valuations
           </h2>
           <p className="text-sm text-slate-400 mt-1">
-            Valuation metrics across sectors and indices
+            P/E, EV/EBITDA, and EV/REVS metrics across sectors and indices
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-slate-700 bg-slate-800/50">
-          <button
-            onClick={() => setSelectedValuationTab('pe')}
-            className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              selectedValuationTab === 'pe'
-                ? 'border-blue-500 text-blue-400 bg-slate-700/50'
-                : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-700/30'
-            }`}
-          >
-            P/E NTM
-          </button>
-          <button
-            onClick={() => setSelectedValuationTab('ev_ebitda')}
-            className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              selectedValuationTab === 'ev_ebitda'
-                ? 'border-blue-500 text-blue-400 bg-slate-700/50'
-                : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-700/30'
-            }`}
-          >
-            EV/EBITDA NTM
-          </button>
-          <button
-            onClick={() => setSelectedValuationTab('ev_sales')}
-            className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              selectedValuationTab === 'ev_sales'
-                ? 'border-blue-500 text-blue-400 bg-slate-700/50'
-                : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-700/30'
-            }`}
-          >
-            EV/REVS NTM
-          </button>
-        </div>
-        {/* Table Content */}
+        {/* Table Content - All Metrics */}
         <div className="overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center p-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-xs">
               <thead className="bg-slate-700 border-b border-slate-600">
                 <tr>
-                  <th className="text-left py-3 px-4 font-semibold text-white">Index</th>
-                  <th className="text-right py-3 px-4 font-semibold text-white">Avg</th>
-                  <th className="text-right py-3 px-4 font-semibold text-white">3-yr Median</th>
-                  <th className="text-right py-3 px-4 font-semibold text-white">3-yr min</th>
-                  <th className="text-right py-3 px-4 font-semibold text-white">3-yr max</th>
+                  <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-10">Index</th>
+                  <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-l border-r border-slate-600">P/E NTM</th>
+                  <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">EV/EBITDA NTM</th>
+                  <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white">EV/REVS NTM</th>
+                </tr>
+                <tr className="bg-slate-700/50 border-b-2 border-slate-600">
+                  <th className="py-2 px-3"></th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Max</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
-                {sectorValuations.map((sector) => {
-                  let avg, median, min, max
-                  if (selectedValuationTab === 'pe') {
-                    avg = sector.pe_avg
-                    median = sector.pe_median
-                    min = sector.pe_min
-                    max = sector.pe_max
-                  } else if (selectedValuationTab === 'ev_ebitda') {
-                    avg = sector.ev_ebitda_avg
-                    median = sector.ev_ebitda_median
-                    min = sector.ev_ebitda_min
-                    max = sector.ev_ebitda_max
-                  } else {
-                    avg = sector.ev_sales_avg
-                    median = sector.ev_sales_median
-                    min = sector.ev_sales_min
-                    max = sector.ev_sales_max
-                  }
-
-                  return (
-                    <tr key={sector.ticker} className="hover:bg-slate-700/50 transition-colors">
-                      <td className="py-3 px-4 font-semibold text-white">
-                        {sector.ticker} <span className="text-slate-400 font-normal">• {sectorNames[sector.ticker]}</span>
-                      </td>
-                      <td className="text-right py-3 px-4 text-slate-300">
-                        {avg !== null ? avg.toFixed(1) : '-'}
-                      </td>
-                      <td className="text-right py-3 px-4 text-slate-300">
-                        {median !== null ? median.toFixed(1) : '-'}
-                      </td>
-                      <td className="text-right py-3 px-4 text-slate-300">
-                        {min !== null ? min.toFixed(1) : '-'}
-                      </td>
-                      <td className="text-right py-3 px-4 text-slate-300">
-                        {max !== null ? max.toFixed(1) : '-'}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {sectorValuations.map((sector) => (
+                  <tr key={sector.ticker} className="hover:bg-slate-700/50 transition-colors">
+                    <td className="py-3 px-3 font-semibold text-white sticky left-0 bg-slate-800 z-10">
+                      <div className="flex flex-col">
+                        <span>{sector.ticker}</span>
+                        <span className="text-slate-400 font-normal text-[10px]">{sectorNames[sector.ticker]}</span>
+                      </div>
+                    </td>
+                    {/* P/E NTM */}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.pe_avg !== null ? sector.pe_avg.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.pe_median !== null ? sector.pe_median.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.pe_min !== null ? sector.pe_min.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300 border-r border-slate-700">
+                      {sector.pe_max !== null ? sector.pe_max.toFixed(1) : '-'}
+                    </td>
+                    {/* EV/EBITDA NTM */}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.ev_ebitda_avg !== null ? sector.ev_ebitda_avg.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.ev_ebitda_median !== null ? sector.ev_ebitda_median.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.ev_ebitda_min !== null ? sector.ev_ebitda_min.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300 border-r border-slate-700">
+                      {sector.ev_ebitda_max !== null ? sector.ev_ebitda_max.toFixed(1) : '-'}
+                    </td>
+                    {/* EV/REVS NTM */}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.ev_sales_avg !== null ? sector.ev_sales_avg.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.ev_sales_median !== null ? sector.ev_sales_median.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.ev_sales_min !== null ? sector.ev_sales_min.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {sector.ev_sales_max !== null ? sector.ev_sales_max.toFixed(1) : '-'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
@@ -299,107 +286,110 @@ export default function SectorsPage() {
                 onChange={(e) => setSelectedSector(e.target.value)}
                 className="px-4 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="SMH">SMH - Semiconductors</option>
                 <option value="SPY">SPY - S&P 500</option>
                 <option value="QQQ">QQQ - Nasdaq 100</option>
+                <option value="DIA">DIA - Dow Jones</option>
+                <option value="XLK">XLK - Technology</option>
+                <option value="XLF">XLF - Financials</option>
+                <option value="XLC">XLC - Communication Services</option>
+                <option value="XLY">XLY - Consumer Discretionary</option>
+                <option value="XLP">XLP - Consumer Staples</option>
+                <option value="XLE">XLE - Energy</option>
+                <option value="XLV">XLV - Healthcare</option>
+                <option value="XLI">XLI - Industrials</option>
+                <option value="XLB">XLB - Materials</option>
+                <option value="XLRE">XLRE - Real Estate</option>
+                <option value="XLU">XLU - Utilities</option>
+                <option value="SOXX">SOXX - Semiconductors (PHLX)</option>
+                <option value="SMH">SMH - Semiconductors (VanEck)</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Tabs for Holdings */}
-        <div className="flex border-b border-slate-700 bg-slate-800/50">
-          <button
-            onClick={() => setSelectedHoldingsTab('pe')}
-            className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              selectedHoldingsTab === 'pe'
-                ? 'border-blue-500 text-blue-400 bg-slate-700/50'
-                : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-700/30'
-            }`}
-          >
-            P/E NTM
-          </button>
-          <button
-            onClick={() => setSelectedHoldingsTab('ev_ebitda')}
-            className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              selectedHoldingsTab === 'ev_ebitda'
-                ? 'border-blue-500 text-blue-400 bg-slate-700/50'
-                : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-700/30'
-            }`}
-          >
-            EV/EBITDA NTM
-          </button>
-          <button
-            onClick={() => setSelectedHoldingsTab('ev_sales')}
-            className={`px-6 py-3 text-sm font-medium transition-colors border-b-2 ${
-              selectedHoldingsTab === 'ev_sales'
-                ? 'border-blue-500 text-blue-400 bg-slate-700/50'
-                : 'border-transparent text-slate-400 hover:text-white hover:bg-slate-700/30'
-            }`}
-          >
-            EV/REVS NTM
-          </button>
-        </div>
-
-        {/* Holdings Table */}
+        {/* Holdings Table - All Metrics */}
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs">
             <thead className="bg-slate-700 border-b border-slate-600">
               <tr>
-                <th className="text-left py-3 px-4 font-semibold text-white">Ticker</th>
-                <th className="text-left py-3 px-4 font-semibold text-white">Company Name</th>
-                <th className="text-right py-3 px-4 font-semibold text-white">Weight</th>
-                <th className="text-right py-3 px-4 font-semibold text-white">Avg</th>
-                <th className="text-right py-3 px-4 font-semibold text-white">3-yr Median</th>
-                <th className="text-right py-3 px-4 font-semibold text-white">3-yr min</th>
-                <th className="text-right py-3 px-4 font-semibold text-white">3-yr max</th>
+                <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-10">Ticker</th>
+                <th className="text-left py-3 px-3 font-semibold text-white">Company Name</th>
+                <th className="text-right py-3 px-3 font-semibold text-white border-r border-slate-600">Weight</th>
+                <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">P/E NTM</th>
+                <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">EV/EBITDA NTM</th>
+                <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white">EV/REVS NTM</th>
+              </tr>
+              <tr className="bg-slate-700/50 border-b-2 border-slate-600">
+                <th className="py-2 px-3"></th>
+                <th className="py-2 px-3"></th>
+                <th className="py-2 px-3 border-r border-slate-600"></th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                <th className="text-center py-2 px-2 text-slate-400 font-medium">Max</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
               {sectorHoldings[selectedSector]?.map((holding) => {
                 const valuation = holdingsValuations.find(v => v.ticker === holding.ticker)
-                let avg, median, min, max
-                if (valuation) {
-                  if (selectedHoldingsTab === 'pe') {
-                    avg = valuation.pe_avg
-                    median = valuation.pe_median
-                    min = valuation.pe_min
-                    max = valuation.pe_max
-                  } else if (selectedHoldingsTab === 'ev_ebitda') {
-                    avg = valuation.ev_ebitda_avg
-                    median = valuation.ev_ebitda_median
-                    min = valuation.ev_ebitda_min
-                    max = valuation.ev_ebitda_max
-                  } else {
-                    avg = valuation.ev_sales_avg
-                    median = valuation.ev_sales_median
-                    min = valuation.ev_sales_min
-                    max = valuation.ev_sales_max
-                  }
-                }
 
                 return (
                   <tr key={holding.ticker} className="hover:bg-slate-700/50 transition-colors">
-                    <td className="py-3 px-4 font-semibold text-white">
+                    <td className="py-3 px-3 font-semibold text-white sticky left-0 bg-slate-800 z-10">
                       {holding.ticker}
                     </td>
-                    <td className="py-3 px-4 text-slate-300">
+                    <td className="py-3 px-3 text-slate-300">
                       {holding.name}
                     </td>
-                    <td className="text-right py-3 px-4 font-medium text-blue-400">
+                    <td className="text-right py-3 px-3 font-medium text-blue-400 border-r border-slate-700">
                       {holding.weight.toFixed(1)}%
                     </td>
-                    <td className="text-right py-3 px-4 text-slate-300">
-                      {avg !== null && avg !== undefined ? avg.toFixed(1) : '-'}
+                    {/* P/E NTM */}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.pe_avg !== null && valuation?.pe_avg !== undefined ? valuation.pe_avg.toFixed(1) : '-'}
                     </td>
-                    <td className="text-right py-3 px-4 text-slate-300">
-                      {median !== null && median !== undefined ? median.toFixed(1) : '-'}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.pe_median !== null && valuation?.pe_median !== undefined ? valuation.pe_median.toFixed(1) : '-'}
                     </td>
-                    <td className="text-right py-3 px-4 text-slate-300">
-                      {min !== null && min !== undefined ? min.toFixed(1) : '-'}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.pe_min !== null && valuation?.pe_min !== undefined ? valuation.pe_min.toFixed(1) : '-'}
                     </td>
-                    <td className="text-right py-3 px-4 text-slate-300">
-                      {max !== null && max !== undefined ? max.toFixed(1) : '-'}
+                    <td className="text-center py-3 px-2 text-slate-300 border-r border-slate-700">
+                      {valuation?.pe_max !== null && valuation?.pe_max !== undefined ? valuation.pe_max.toFixed(1) : '-'}
+                    </td>
+                    {/* EV/EBITDA NTM */}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.ev_ebitda_avg !== null && valuation?.ev_ebitda_avg !== undefined ? valuation.ev_ebitda_avg.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.ev_ebitda_median !== null && valuation?.ev_ebitda_median !== undefined ? valuation.ev_ebitda_median.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.ev_ebitda_min !== null && valuation?.ev_ebitda_min !== undefined ? valuation.ev_ebitda_min.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300 border-r border-slate-700">
+                      {valuation?.ev_ebitda_max !== null && valuation?.ev_ebitda_max !== undefined ? valuation.ev_ebitda_max.toFixed(1) : '-'}
+                    </td>
+                    {/* EV/REVS NTM */}
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.ev_sales_avg !== null && valuation?.ev_sales_avg !== undefined ? valuation.ev_sales_avg.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.ev_sales_median !== null && valuation?.ev_sales_median !== undefined ? valuation.ev_sales_median.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.ev_sales_min !== null && valuation?.ev_sales_min !== undefined ? valuation.ev_sales_min.toFixed(1) : '-'}
+                    </td>
+                    <td className="text-center py-3 px-2 text-slate-300">
+                      {valuation?.ev_sales_max !== null && valuation?.ev_sales_max !== undefined ? valuation.ev_sales_max.toFixed(1) : '-'}
                     </td>
                   </tr>
                 )

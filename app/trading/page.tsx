@@ -8,11 +8,12 @@ interface HoldingData {
   market_value: number
 }
 
-interface UniverseData {
+interface BetaData {
   ticker: string
   true_beta: number | null
   beta_1yr: number | null
   beta_3yr: number | null
+  beta_5yr: number | null
 }
 
 interface Trade {
@@ -28,31 +29,35 @@ interface Trade {
 }
 
 interface PortfolioSummary {
-  currentCash: number
+  currentCashPct: number
   currentTrueBeta: number
   current1YrBeta: number
   current3YrBeta: number
-  targetCash: number
+  current5YrBeta: number
+  targetCashPct: number
   targetTrueBeta: number
   target1YrBeta: number
   target3YrBeta: number
+  target5YrBeta: number
 }
 
 export default function TradingPage() {
   const [loading, setLoading] = useState(true)
   const [nav, setNav] = useState(0)
   const [holdings, setHoldings] = useState<HoldingData[]>([])
-  const [universe, setUniverse] = useState<UniverseData[]>([])
+  const [betaData, setBetaData] = useState<BetaData[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary>({
-    currentCash: 0,
+    currentCashPct: 0,
     currentTrueBeta: 0,
     current1YrBeta: 0,
     current3YrBeta: 0,
-    targetCash: 0,
+    current5YrBeta: 0,
+    targetCashPct: 0,
     targetTrueBeta: 0,
     target1YrBeta: 0,
-    target3YrBeta: 0
+    target3YrBeta: 0,
+    target5YrBeta: 0
   })
 
   useEffect(() => {
@@ -61,36 +66,73 @@ export default function TradingPage() {
 
   useEffect(() => {
     calculatePortfolioSummary()
-  }, [holdings, universe, trades, nav])
+  }, [holdings, betaData, trades, nav])
 
   const fetchInitialData = async () => {
     try {
       setLoading(true)
 
-      // Fetch Portfolio NAV
+      // Fetch Portfolio NAV (totalMarketValue from portfolio API)
       const portfolioRes = await fetch('/api/portfolio', { cache: 'no-store' })
       const portfolioData = await portfolioRes.json()
-      if (portfolioData.success) {
-        setNav(portfolioData.data.nav)
+      console.log('Trading: Portfolio data:', portfolioData)
+      
+      let portfolioNav = 0
+      if (portfolioData.success && portfolioData.data && portfolioData.data.totalMarketValue) {
+        portfolioNav = portfolioData.data.totalMarketValue
+        setNav(portfolioNav)
+        console.log(`Trading: NAV = $${portfolioNav.toLocaleString()}`)
+      } else {
+        console.error('Trading: Failed to fetch NAV - data structure:', portfolioData)
       }
 
       // Fetch Holdings with weights
       const holdingsRes = await fetch('/api/holdings')
       const holdingsData = await holdingsRes.json()
-      if (holdingsData.success && holdingsData.data) {
-        const holdingsWithWeights = holdingsData.data.map((h: any) => ({
-          stock_ticker: h.stock_ticker,
-          weight_pct: (h.market_value / portfolioData.data.nav) * 100,
-          market_value: h.market_value
-        }))
+      console.log('Trading: Holdings response:', holdingsData)
+      
+      if (holdingsData.success && holdingsData.data && holdingsData.data.length > 0) {
+        const holdingsWithWeights = holdingsData.data.map((h: any) => {
+          const weight = portfolioNav > 0 ? (h.market_value / portfolioNav) * 100 : 0
+          return {
+            stock_ticker: h.stock_ticker,
+            weight_pct: weight,
+            market_value: h.market_value
+          }
+        })
         setHoldings(holdingsWithWeights)
+        console.log(`Trading: Loaded ${holdingsWithWeights.length} holdings`)
+      } else {
+        console.error('Trading: No holdings data available')
       }
 
-      // Fetch Universe data for beta values
-      const universeRes = await fetch('/api/universe')
-      const universeData = await universeRes.json()
-      if (universeData.success) {
-        setUniverse(universeData.data)
+      // Fetch FactSet data for beta values (1yr, 3yr, 5yr)
+      const factsetRes = await fetch('/api/factset')
+      const factsetData = await factsetRes.json()
+      console.log('Trading: FactSet response:', factsetData)
+      
+      if (factsetData.success && factsetData.data && factsetData.data.length > 0) {
+        // Map factset data to beta data structure
+        const betaDataArray: BetaData[] = factsetData.data.map((f: any) => {
+          const ticker = (f.Ticker || f.TICKER || '').trim().toUpperCase()
+          return {
+            ticker,
+            true_beta: null, // Not available in factset, would come from universe if needed
+            beta_1yr: f['1 yr Beta'] ? parseFloat(f['1 yr Beta']) : null,
+            beta_3yr: f['3 yr beta'] ? parseFloat(f['3 yr beta']) : null,
+            beta_5yr: f['5 yr beta - monthly'] ? parseFloat(f['5 yr beta - monthly']) : null
+          }
+        }).filter((b: BetaData) => b.ticker) // Remove entries without ticker
+        
+        console.log(`Trading: Loaded ${betaDataArray.length} stocks with beta data from FactSet`)
+        setBetaData(betaDataArray)
+        
+        // Log sample betas for debugging
+        if (betaDataArray.length > 0) {
+          console.log('Trading: Sample beta data:', betaDataArray.slice(0, 3))
+        }
+      } else {
+        console.error('Trading: No FactSet data available')
       }
 
     } catch (error) {
@@ -101,61 +143,104 @@ export default function TradingPage() {
   }
 
   const calculatePortfolioSummary = () => {
-    // Current Cash: Sum of cash & equivalents + FGXXX
+    // Guard against calculating before data is loaded
+    if (holdings.length === 0 || betaData.length === 0 || nav === 0) {
+      console.log(`Trading: Skipping calculation - Holdings: ${holdings.length}, Beta Data: ${betaData.length}, NAV: ${nav}`)
+      return
+    }
+    
+    console.log(`Trading: Calculating summary - Holdings: ${holdings.length}, Beta Data: ${betaData.length}, NAV: ${nav}`)
+    
+    // Debug: Log first few holdings and beta data
+    console.log('Trading: First 3 holdings:', holdings.slice(0, 3).map(h => ({ ticker: h.stock_ticker, weight: h.weight_pct })))
+    console.log('Trading: First 3 beta entries:', betaData.slice(0, 3).map(b => ({ ticker: b.ticker, beta_1yr: b.beta_1yr })))
+    
+    // Current Cash: Sum of cash & equivalents + FGXXX as percentage
     const cashHoldings = holdings.filter(h => 
       h.stock_ticker.toUpperCase().includes('CASH') || 
       h.stock_ticker.toUpperCase().includes('EQUIVALENTS') ||
       h.stock_ticker === 'FGXXX'
     )
-    const currentCash = cashHoldings.reduce((sum, h) => sum + h.market_value, 0)
+    const currentCashValue = cashHoldings.reduce((sum, h) => sum + h.market_value, 0)
+    const currentCashPct = nav > 0 ? (currentCashValue / nav) * 100 : 0
+    console.log(`Trading: Cash - ${cashHoldings.length} holdings, $${currentCashValue}, ${currentCashPct.toFixed(2)}%`)
 
     // Current Betas: Sumproduct of weights with corresponding betas
     let currentTrueBeta = 0
     let current1YrBeta = 0
     let current3YrBeta = 0
+    let current5YrBeta = 0
+    
+    let matchedCount = 0
+    let unmatchedTickers: string[] = []
 
     holdings.forEach(holding => {
-      const universeEntry = universe.find(u => u.ticker === holding.stock_ticker)
-      if (universeEntry) {
+      const betaEntry = betaData.find(b => b.ticker === holding.stock_ticker)
+      if (betaEntry) {
+        matchedCount++
         const weight = holding.weight_pct / 100
-        currentTrueBeta += (universeEntry.true_beta || 0) * weight
-        current1YrBeta += (universeEntry.beta_1yr || 0) * weight
-        current3YrBeta += (universeEntry.beta_3yr || 0) * weight
+        currentTrueBeta += (betaEntry.true_beta || 0) * weight
+        current1YrBeta += (betaEntry.beta_1yr || 0) * weight
+        current3YrBeta += (betaEntry.beta_3yr || 0) * weight
+        current5YrBeta += (betaEntry.beta_5yr || 0) * weight
+      } else {
+        unmatchedTickers.push(holding.stock_ticker)
       }
     })
+    
+    console.log(`Trading: Matched ${matchedCount}/${holdings.length} holdings with beta data`)
+    if (unmatchedTickers.length > 0) {
+      console.log(`Trading: Unmatched tickers:`, unmatchedTickers.slice(0, 10))
+    }
+    console.log(`Trading: Current betas - 1yr: ${current1YrBeta.toFixed(3)}, 3yr: ${current3YrBeta.toFixed(3)}, 5yr: ${current5YrBeta.toFixed(3)}`)
 
-    // Target Cash: Current cash + sum of % cash change from trades
+    // Target Cash: Current cash % + sum of % cash change from trades
     const totalCashChange = trades.reduce((sum, t) => sum + t.cashChange, 0)
-    const targetCash = currentCash + (totalCashChange / 100 * nav)
+    const targetCashPct = currentCashPct + totalCashChange
 
-    // Target Betas: Current beta + weighted average of trade betas
-    let tradeTrueBetaImpact = 0
-    let trade1YrBetaImpact = 0
-    let trade3YrBetaImpact = 0
+    // Target Betas: SUMPRODUCT approach - build target weights for ALL holdings
+    const targetWeights = new Map<string, number>()
 
+    // 1. Start with current holdings weights
+    holdings.forEach(h => {
+      targetWeights.set(h.stock_ticker, h.weight_pct)
+    })
+
+    // 2. Apply trades to update target weights
     trades.forEach(trade => {
-      const universeEntry = universe.find(u => u.ticker === trade.ticker)
-      if (universeEntry && trade.targetWeight !== 0) {
-        const weightChange = (trade.targetWeight - trade.currentWeight) / 100
-        tradeTrueBetaImpact += (universeEntry.true_beta || 0) * weightChange
-        trade1YrBetaImpact += (universeEntry.beta_1yr || 0) * weightChange
-        trade3YrBetaImpact += (universeEntry.beta_3yr || 0) * weightChange
+      if (trade.ticker && trade.targetWeight !== undefined) {
+        targetWeights.set(trade.ticker, trade.targetWeight)
       }
     })
 
-    const targetTrueBeta = currentTrueBeta + tradeTrueBetaImpact
-    const target1YrBeta = current1YrBeta + trade1YrBetaImpact
-    const target3YrBeta = current3YrBeta + trade3YrBetaImpact
+    // 3. Calculate target betas using SUMPRODUCT
+    let targetTrueBeta = 0
+    let target1YrBeta = 0
+    let target3YrBeta = 0
+    let target5YrBeta = 0
+
+    targetWeights.forEach((weight, ticker) => {
+      const betaEntry = betaData.find(b => b.ticker === ticker)
+      if (betaEntry) {
+        const weightDecimal = weight / 100
+        targetTrueBeta += (betaEntry.true_beta || 0) * weightDecimal
+        target1YrBeta += (betaEntry.beta_1yr || 0) * weightDecimal
+        target3YrBeta += (betaEntry.beta_3yr || 0) * weightDecimal
+        target5YrBeta += (betaEntry.beta_5yr || 0) * weightDecimal
+      }
+    })
 
     setPortfolioSummary({
-      currentCash,
+      currentCashPct,
       currentTrueBeta,
       current1YrBeta,
       current3YrBeta,
-      targetCash,
+      current5YrBeta,
+      targetCashPct,
       targetTrueBeta,
       target1YrBeta,
-      target3YrBeta
+      target3YrBeta,
+      target5YrBeta
     })
   }
 
@@ -266,12 +351,12 @@ export default function TradingPage() {
         </h2>
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {/* Current Metrics */}
+          {/* Current Metrics - Column 1 */}
           <div className="space-y-4">
             <div>
               <p className="text-xs font-medium text-slate-400 mb-1">Current Cash</p>
               <p className="text-xl font-bold text-white">
-                ${portfolioSummary.currentCash.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                {portfolioSummary.currentCashPct.toFixed(2)}%
               </p>
             </div>
             <div>
@@ -282,6 +367,7 @@ export default function TradingPage() {
             </div>
           </div>
 
+          {/* Current Metrics - Column 2 */}
           <div className="space-y-4">
             <div>
               <p className="text-xs font-medium text-slate-400 mb-1">Current 1-Year Beta</p>
@@ -295,14 +381,20 @@ export default function TradingPage() {
                 {portfolioSummary.current3YrBeta.toFixed(2)}x
               </p>
             </div>
+            <div>
+              <p className="text-xs font-medium text-slate-400 mb-1">Current 5-Year Beta</p>
+              <p className="text-xl font-bold text-white">
+                {portfolioSummary.current5YrBeta.toFixed(2)}x
+              </p>
+            </div>
           </div>
 
-          {/* Target Metrics */}
+          {/* Target Metrics - Column 3 */}
           <div className="space-y-4">
             <div>
               <p className="text-xs font-medium text-blue-400 mb-1">Target Cash</p>
               <p className="text-xl font-bold text-blue-400">
-                ${portfolioSummary.targetCash.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                {portfolioSummary.targetCashPct.toFixed(2)}%
               </p>
             </div>
             <div>
@@ -313,6 +405,7 @@ export default function TradingPage() {
             </div>
           </div>
 
+          {/* Target Metrics - Column 4 */}
           <div className="space-y-4">
             <div>
               <p className="text-xs font-medium text-blue-400 mb-1">Target 1-Year Beta</p>
@@ -324,6 +417,12 @@ export default function TradingPage() {
               <p className="text-xs font-medium text-blue-400 mb-1">Target 3-Year Beta</p>
               <p className="text-xl font-bold text-blue-400">
                 {portfolioSummary.target3YrBeta.toFixed(2)}x
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-blue-400 mb-1">Target 5-Year Beta</p>
+              <p className="text-xl font-bold text-blue-400">
+                {portfolioSummary.target5YrBeta.toFixed(2)}x
               </p>
             </div>
           </div>
