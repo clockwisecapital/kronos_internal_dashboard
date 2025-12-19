@@ -10,6 +10,10 @@ interface StockScore {
   marketValue: number
   spyWeight: number | null
   qqqWeight: number | null
+  benchmark1: string | null
+  benchmark2: string | null
+  benchmark3: string | null
+  benchmarkCustom: string | null
   
   // VALUE metrics
   peRatio: number | null
@@ -81,7 +85,7 @@ interface ScoringResponse {
 
 export default function ScoringPage() {
   const [profile, setProfile] = useState<'BASE' | 'CAUTIOUS' | 'AGGRESSIVE'>('BASE')
-  const [benchmark, setBenchmark] = useState<'QQQ' | 'SPY'>('QQQ')
+  const [benchmark, setBenchmark] = useState<'BENCHMARK1' | 'BENCHMARK2' | 'BENCHMARK3' | 'BENCHMARK_CUSTOM'>('BENCHMARK1')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scores, setScores] = useState<StockScore[]>([])
@@ -92,14 +96,14 @@ export default function ScoringPage() {
 
   useEffect(() => {
     fetchScores()
-  }, [profile])
+  }, [profile, benchmark])
 
   const fetchScores = async () => {
     try {
       setLoading(true)
       setError(null)
       
-      const response = await fetch(`/api/scoring?profile=${profile}`)
+      const response = await fetch(`/api/scoring?profile=${profile}&benchmark=${benchmark}`)
       const data: ScoringResponse = await response.json()
       
       if (!data.success) {
@@ -198,11 +202,13 @@ export default function ScoringPage() {
             <label className="text-sm font-medium text-slate-300">Benchmark:</label>
             <select
               value={benchmark}
-              onChange={(e) => setBenchmark(e.target.value as 'QQQ' | 'SPY')}
+              onChange={(e) => setBenchmark(e.target.value as 'BENCHMARK1' | 'BENCHMARK2' | 'BENCHMARK3' | 'BENCHMARK_CUSTOM')}
               className="px-3 py-2 bg-slate-700 border border-slate-600 text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="QQQ">QQQ (Nasdaq 100)</option>
-              <option value="SPY">SPY (S&P 500)</option>
+              <option value="BENCHMARK1">Benchmark 1</option>
+              <option value="BENCHMARK2">Benchmark 2</option>
+              <option value="BENCHMARK3">Benchmark 3</option>
+              <option value="BENCHMARK_CUSTOM">Benchmark Custom</option>
             </select>
           </div>
 
@@ -230,10 +236,12 @@ export default function ScoringPage() {
                   Ticker
                 </th>
                 <th 
-                  className="px-4 py-3 text-right text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:text-blue-400"
-                  onClick={() => handleSort(benchmark === 'QQQ' ? 'qqqWeight' : 'spyWeight')}
+                  className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider"
                 >
-                  {benchmark} Wgt
+                  {benchmark === 'BENCHMARK1' ? 'Benchmark 1' : 
+                   benchmark === 'BENCHMARK2' ? 'Benchmark 2' : 
+                   benchmark === 'BENCHMARK3' ? 'Benchmark 3' : 
+                   'Benchmark Custom'}
                 </th>
                 <th 
                   className="px-4 py-3 text-center text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:text-blue-400"
@@ -276,15 +284,12 @@ export default function ScoringPage() {
                   <tr key={stock.ticker} className="hover:bg-slate-700/50">
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-medium text-white">{stock.ticker}</div>
-                      <div className="text-xs text-slate-400">
-                        ${(stock.marketValue / 1000000).toFixed(2)}M
-                      </div>
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-slate-300">
-                      {benchmark === 'QQQ' 
-                        ? (stock.qqqWeight !== null ? `${stock.qqqWeight.toFixed(2)}%` : 'N/A')
-                        : (stock.spyWeight !== null ? `${stock.spyWeight.toFixed(2)}%` : 'N/A')
-                      }
+                    <td className="px-4 py-3 whitespace-nowrap text-left text-sm text-slate-300">
+                      {benchmark === 'BENCHMARK1' ? (stock.benchmark1 || 'N/A') :
+                       benchmark === 'BENCHMARK2' ? (stock.benchmark2 || 'N/A') :
+                       benchmark === 'BENCHMARK3' ? (stock.benchmark3 || 'N/A') :
+                       (stock.benchmarkCustom || 'N/A')}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-center">
                       <ScoreCell score={stock.valueScore} />
@@ -316,7 +321,7 @@ export default function ScoringPage() {
                   {/* Expanded Details Row */}
                   {expandedRow === stock.ticker && (
                     <tr>
-                      <td colSpan={8} className="px-4 py-4 bg-slate-900/50">
+                      <td colSpan={7} className="px-4 py-4 bg-slate-900/50">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* VALUE Details */}
                           <CompositeScoreCard

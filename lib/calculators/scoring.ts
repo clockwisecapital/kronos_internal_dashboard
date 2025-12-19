@@ -198,6 +198,60 @@ export function calculateWeightedAverage(
   return Math.round((weightedSum / totalWeight) * 10) / 10
 }
 
+/**
+ * Calculate benchmark-relative score (0-100 scale)
+ * Compares stock metric against its benchmark
+ * @param stockValue - The stock's metric value
+ * @param benchmarkValue - The benchmark's metric value
+ * @param invertScore - If true, lower is better (for P/E, volatility, etc.)
+ */
+export function calculateBenchmarkRelativeScore(
+  stockValue: number | null,
+  benchmarkValue: number | null,
+  invertScore: boolean = false
+): number | null {
+  if (stockValue === null || benchmarkValue === null || benchmarkValue === 0) {
+    return null
+  }
+  
+  // Calculate relative performance
+  const ratio = stockValue / benchmarkValue
+  
+  // Convert to 0-100 score
+  // If invertScore (lower is better): ratio < 1 is good, ratio > 1 is bad
+  // If not inverted (higher is better): ratio > 1 is good, ratio < 1 is bad
+  
+  let score: number
+  if (invertScore) {
+    // Lower is better (P/E, EV/EBITDA, volatility, beta, etc.)
+    // ratio = 0.8 means stock is 20% better → score = 60
+    // ratio = 1.0 means equal → score = 50
+    // ratio = 1.2 means stock is 20% worse → score = 40
+    if (ratio <= 1) {
+      // Better than benchmark: 50-100 scale
+      score = 50 + (1 - ratio) * 100
+    } else {
+      // Worse than benchmark: 0-50 scale
+      score = 50 / ratio
+    }
+  } else {
+    // Higher is better (returns, target price upside, etc.)
+    // ratio = 1.2 means stock is 20% better → score = 60
+    // ratio = 1.0 means equal → score = 50
+    // ratio = 0.8 means stock is 20% worse → score = 40
+    if (ratio >= 1) {
+      // Better than benchmark: 50-100 scale
+      score = 50 + (ratio - 1) * 100
+    } else {
+      // Worse than benchmark: 0-50 scale
+      score = 50 * ratio
+    }
+  }
+  
+  // Clamp to 0-100
+  return Math.max(0, Math.min(100, Math.round(score * 10) / 10))
+}
+
 // ============================================================================
 // Metric Extraction Functions
 // ============================================================================
@@ -485,6 +539,46 @@ export function calculateTotalScore(
   )
   
   return { totalScore }
+}
+
+/**
+ * Calculate benchmark-relative scores for VALUE, MOMENTUM, and RISK
+ * QUALITY remains as percentile ranking within holdings
+ */
+export function calculateBenchmarkRelativeScores(
+  stockMetrics: IndividualMetrics,
+  benchmarkMetrics: IndividualMetrics
+): Partial<ScoredMetrics> {
+  return {
+    // VALUE scores (lower is better - inverted)
+    peRatioScore: calculateBenchmarkRelativeScore(stockMetrics.peRatio, benchmarkMetrics.peRatio, true),
+    evEbitdaScore: calculateBenchmarkRelativeScore(stockMetrics.evEbitda, benchmarkMetrics.evEbitda, true),
+    evSalesScore: calculateBenchmarkRelativeScore(stockMetrics.evSales, benchmarkMetrics.evSales, true),
+    targetPriceUpsideScore: calculateBenchmarkRelativeScore(stockMetrics.targetPriceUpside, benchmarkMetrics.targetPriceUpside, false),
+    
+    // MOMENTUM scores (higher is better)
+    return12MEx1MScore: calculateBenchmarkRelativeScore(stockMetrics.return12MEx1M, benchmarkMetrics.return12MEx1M, false),
+    return3MScore: calculateBenchmarkRelativeScore(stockMetrics.return3M, benchmarkMetrics.return3M, false),
+    pct52WeekHighScore: calculateBenchmarkRelativeScore(stockMetrics.pct52WeekHigh, benchmarkMetrics.pct52WeekHigh, false),
+    epsSurpriseScore: calculateBenchmarkRelativeScore(stockMetrics.epsSurprise, benchmarkMetrics.epsSurprise, false),
+    revSurpriseScore: calculateBenchmarkRelativeScore(stockMetrics.revSurprise, benchmarkMetrics.revSurprise, false),
+    ntmEpsChangeScore: calculateBenchmarkRelativeScore(stockMetrics.ntmEpsChange, benchmarkMetrics.ntmEpsChange, false),
+    ntmRevChangeScore: calculateBenchmarkRelativeScore(stockMetrics.ntmRevChange, benchmarkMetrics.ntmRevChange, false),
+    
+    // QUALITY scores - will be calculated separately using percentile ranking (N/A for now)
+    roicTTMScore: null,
+    grossProfitabilityScore: null,
+    accrualsScore: null,
+    fcfToAssetsScore: null,
+    roic3YrScore: null,
+    ebitdaMarginScore: null,
+    
+    // RISK scores (lower is better - inverted)
+    beta3YrScore: calculateBenchmarkRelativeScore(stockMetrics.beta3Yr, benchmarkMetrics.beta3Yr, true),
+    volatility30DayScore: calculateBenchmarkRelativeScore(stockMetrics.volatility30Day, benchmarkMetrics.volatility30Day, true),
+    maxDrawdownScore: calculateBenchmarkRelativeScore(stockMetrics.maxDrawdown, benchmarkMetrics.maxDrawdown, true),
+    financialLeverageScore: null // Skipped
+  }
 }
 
 /**

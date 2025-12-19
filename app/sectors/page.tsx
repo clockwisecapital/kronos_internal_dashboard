@@ -21,24 +21,56 @@ interface SectorValuation {
   ev_sales_max: number | null
 }
 
+interface SectorHolding {
+  ticker: string
+  name: string
+  weight: number
+  isClockwiseHolding: boolean
+}
+
+type SortColumn = 'ticker' | 'pe_avg' | 'ev_ebitda_avg' | 'ev_sales_avg'
+type SortDirection = 'asc' | 'desc'
+type HoldingSortColumn = 'ticker' | 'name' | 'weight'
+
 export default function SectorsPage() {
   const [selectedSector, setSelectedSector] = useState('SPY')
   const [sectorValuations, setSectorValuations] = useState<SectorValuation[]>([])
+  const [sectorHoldings, setSectorHoldings] = useState<SectorHolding[]>([])
   const [holdingsValuations, setHoldingsValuations] = useState<SectorValuation[]>([])
   const [loading, setLoading] = useState(true)
+  const [holdingsLoading, setHoldingsLoading] = useState(false)
+  
+  // Sorting state for Sector Valuations table
+  const [sortColumn, setSortColumn] = useState<SortColumn>('ticker')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  
+  // Sorting state for Sector Holdings table
+  const [holdingSortColumn, setHoldingSortColumn] = useState<HoldingSortColumn>('weight')
+  const [holdingSortDirection, setHoldingSortDirection] = useState<SortDirection>('desc')
+  
+  // Single Ticker Search state
+  const [searchTicker, setSearchTicker] = useState('')
+  const [tickerData, setTickerData] = useState<SectorValuation | null>(null)
+  const [tickerLoading, setTickerLoading] = useState(false)
+  const [tickerError, setTickerError] = useState<string | null>(null)
 
   // Fetch sector valuations on mount
   useEffect(() => {
     fetchSectorValuations()
   }, [])
 
-  // Fetch holdings valuations when sector changes
+  // Fetch sector holdings when sector changes
   useEffect(() => {
-    const tickers = sectorHoldings[selectedSector]?.map(h => h.ticker) || []
+    fetchSectorHoldings(selectedSector)
+  }, [selectedSector])
+
+  // Fetch holdings valuations when sector holdings are loaded
+  useEffect(() => {
+    const tickers = sectorHoldings.map(h => h.ticker)
     if (tickers.length > 0) {
       fetchHoldingsValuations(tickers)
     }
-  }, [selectedSector])
+  }, [sectorHoldings])
 
   const fetchSectorValuations = async () => {
     try {
@@ -75,6 +107,23 @@ export default function SectorsPage() {
     }
   }
 
+  const fetchSectorHoldings = async (sector: string) => {
+    try {
+      setHoldingsLoading(true)
+      const response = await fetch(`/api/sector-holdings?sector=${sector}`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data) {
+          setSectorHoldings(result.data)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching sector holdings:', error)
+    } finally {
+      setHoldingsLoading(false)
+    }
+  }
+
   const fetchHoldingsValuations = async (tickers: string[]) => {
     try {
       const response = await fetch(`/api/sector-valuations?tickers=${tickers.join(',')}`)
@@ -107,6 +156,57 @@ export default function SectorsPage() {
     }
   }
 
+  const handleTickerSearch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!searchTicker.trim()) {
+      setTickerError('Please enter a ticker symbol')
+      return
+    }
+
+    setTickerLoading(true)
+    setTickerError(null)
+    setTickerData(null)
+
+    try {
+      const response = await fetch(`/api/sector-valuations?tickers=${searchTicker.toUpperCase()}`)
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && result.data && result.data.length > 0) {
+          const d = result.data[0]
+          const formatted: SectorValuation = {
+            ticker: d.Ticker,
+            pe_ntm: parseFloat(d['P/E NTM']) || null,
+            pe_avg: parseFloat(d['3-YR AVG NTM P/E']) || null,
+            pe_median: parseFloat(d['3-YR MEDIAN NTM P/E']) || null,
+            pe_min: parseFloat(d['3-YR MIN NTM P/E']) || null,
+            pe_max: parseFloat(d['3-YR MAX NTM P/E']) || null,
+            ev_ebitda_ntm: parseFloat(d['EV/EBITDA - NTM']) || null,
+            ev_ebitda_avg: parseFloat(d['3-YR AVG NTM EV/EBITDA']) || null,
+            ev_ebitda_median: parseFloat(d['3-YR MEDIAN NTM EV/EBITDA']) || null,
+            ev_ebitda_min: parseFloat(d['3-YR MIN NTM EV/EBITDA']) || null,
+            ev_ebitda_max: parseFloat(d['3-YR MAX NTM EV/EBITDA']) || null,
+            ev_sales_ntm: parseFloat(d['EV/Sales - NTM']) || null,
+            ev_sales_avg: parseFloat(d['3-YR AVG NTM EV/SALES']) || null,
+            ev_sales_median: parseFloat(d['3-YR MEDIAN NTM EV/SALES']) || null,
+            ev_sales_min: parseFloat(d['3-YR MIN NTM EV/SALES']) || null,
+            ev_sales_max: parseFloat(d['3-YR MAX NTM EV/SALES']) || null,
+          }
+          setTickerData(formatted)
+        } else {
+          setTickerError(`No data found for ticker: ${searchTicker.toUpperCase()}`)
+        }
+      } else {
+        setTickerError('Failed to fetch ticker data')
+      }
+    } catch (error) {
+      setTickerError('Error fetching ticker data')
+      console.error(error)
+    } finally {
+      setTickerLoading(false)
+    }
+  }
+
   // Sector display names
   const sectorNames: Record<string, string> = {
     'SPY': 'S&P 500',
@@ -127,33 +227,84 @@ export default function SectorsPage() {
     'SMH': 'Semiconductors (VanEck)'
   }
 
-  // Mock sector holdings data
-  const sectorHoldings: Record<string, Array<{ ticker: string; name: string; weight: number }>> = {
-    SMH: [
-      { ticker: 'NVDA', name: 'NVIDIA Corp', weight: 21.2 },
-      { ticker: 'TSM', name: 'Taiwan Semiconductor', weight: 11.8 },
-      { ticker: 'AVGO', name: 'Broadcom Inc', weight: 9.4 },
-      { ticker: 'AMD', name: 'Advanced Micro Devices', weight: 7.6 },
-      { ticker: 'MU', name: 'Micron Technology', weight: 4.2 },
-      { ticker: 'QCOM', name: 'Qualcomm Inc', weight: 3.8 },
-      { ticker: 'INTC', name: 'Intel Corp', weight: 3.5 },
-      { ticker: 'TXN', name: 'Texas Instruments', weight: 2.9 },
-    ],
-    SPY: [
-      { ticker: 'AAPL', name: 'Apple Inc', weight: 7.2 },
-      { ticker: 'MSFT', name: 'Microsoft Corp', weight: 6.8 },
-      { ticker: 'AMZN', name: 'Amazon.com Inc', weight: 3.5 },
-      { ticker: 'NVDA', name: 'NVIDIA Corp', weight: 3.2 },
-      { ticker: 'GOOGL', name: 'Alphabet Inc Class A', weight: 2.1 },
-    ],
-    QQQ: [
-      { ticker: 'AAPL', name: 'Apple Inc', weight: 8.9 },
-      { ticker: 'MSFT', name: 'Microsoft Corp', weight: 8.2 },
-      { ticker: 'NVDA', name: 'NVIDIA Corp', weight: 7.5 },
-      { ticker: 'AMZN', name: 'Amazon.com Inc', weight: 5.4 },
-      { ticker: 'META', name: 'Meta Platforms Inc', weight: 4.8 },
-    ],
+  // Sorting functions
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortColumn(column)
+      setSortDirection('asc')
+    }
   }
+
+  const handleHoldingSort = (column: HoldingSortColumn) => {
+    if (holdingSortColumn === column) {
+      setHoldingSortDirection(holdingSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setHoldingSortColumn(column)
+      setHoldingSortDirection('asc')
+    }
+  }
+
+  // Sort sector valuations
+  const sortedSectorValuations = [...sectorValuations].sort((a, b) => {
+    let aVal: any, bVal: any
+    
+    switch (sortColumn) {
+      case 'ticker':
+        aVal = a.ticker
+        bVal = b.ticker
+        break
+      case 'pe_avg':
+        aVal = a.pe_avg ?? Infinity
+        bVal = b.pe_avg ?? Infinity
+        break
+      case 'ev_ebitda_avg':
+        aVal = a.ev_ebitda_avg ?? Infinity
+        bVal = b.ev_ebitda_avg ?? Infinity
+        break
+      case 'ev_sales_avg':
+        aVal = a.ev_sales_avg ?? Infinity
+        bVal = b.ev_sales_avg ?? Infinity
+        break
+    }
+
+    if (typeof aVal === 'string') {
+      return sortDirection === 'asc' 
+        ? aVal.localeCompare(bVal) 
+        : bVal.localeCompare(aVal)
+    } else {
+      return sortDirection === 'asc' ? aVal - bVal : bVal - aVal
+    }
+  })
+
+  // Sort sector holdings
+  const sortedSectorHoldings = [...sectorHoldings].sort((a, b) => {
+    let aVal: any, bVal: any
+    
+    switch (holdingSortColumn) {
+      case 'ticker':
+        aVal = a.ticker
+        bVal = b.ticker
+        break
+      case 'name':
+        aVal = a.name
+        bVal = b.name
+        break
+      case 'weight':
+        aVal = a.weight
+        bVal = b.weight
+        break
+    }
+
+    if (typeof aVal === 'string') {
+      return holdingSortDirection === 'asc' 
+        ? aVal.localeCompare(bVal) 
+        : bVal.localeCompare(aVal)
+    } else {
+      return holdingSortDirection === 'asc' ? aVal - bVal : bVal - aVal
+    }
+  })
 
   return (
     <div className="p-6 space-y-6">
@@ -170,12 +321,38 @@ export default function SectorsPage() {
       {/* Sector Valuations - All Metrics in One Table */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
         <div className="p-6 border-b border-slate-700">
-          <h2 className="text-lg font-semibold text-white">
-            Sector Valuations
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            P/E, EV/EBITDA, and EV/REVS metrics across sectors and indices
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                Sector Valuations
+              </h2>
+              <p className="text-sm text-slate-400 mt-1">
+                P/E, EV/EBITDA, and EV/REVS metrics across sectors and indices
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-slate-300">
+                Sort by:
+              </label>
+              <select
+                value={sortColumn}
+                onChange={(e) => handleSort(e.target.value as SortColumn)}
+                className="px-4 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              >
+                <option value="ticker">Ticker</option>
+                <option value="pe_avg">P/E Avg</option>
+                <option value="ev_ebitda_avg">EV/EBITDA Avg</option>
+                <option value="ev_sales_avg">EV/Sales Avg</option>
+              </select>
+              <button
+                onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
+                className="px-3 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition-colors text-sm"
+                title={sortDirection === 'asc' ? 'Ascending' : 'Descending'}
+              >
+                {sortDirection === 'asc' ? '↑' : '↓'}
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Table Content - All Metrics */}
@@ -210,7 +387,7 @@ export default function SectorsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
-                {sectorValuations.map((sector) => (
+                {sortedSectorValuations.map((sector) => (
                   <tr key={sector.ticker} className="hover:bg-slate-700/50 transition-colors">
                     <td className="py-3 px-3 font-semibold text-white sticky left-0 bg-slate-800 z-10">
                       <div className="flex flex-col">
@@ -268,13 +445,13 @@ export default function SectorsPage() {
       {/* Sector Holdings with Tabs */}
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden shadow-xl">
         <div className="p-6 border-b border-slate-700">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-semibold text-white">
-                Sector Holdings
+                Top 50 Sector Holdings
               </h2>
               <p className="text-sm text-slate-400 mt-1">
-                Top holdings and valuation metrics for selected sector/index
+                Top 50 holdings by weight with valuation metrics for selected sector/index
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -305,41 +482,73 @@ export default function SectorsPage() {
               </select>
             </div>
           </div>
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-slate-300">
+              Sort by:
+            </label>
+            <select
+              value={holdingSortColumn}
+              onChange={(e) => handleHoldingSort(e.target.value as HoldingSortColumn)}
+              className="px-4 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            >
+              <option value="weight">Weight</option>
+              <option value="ticker">Ticker</option>
+              <option value="name">Company Name</option>
+            </select>
+            <button
+              onClick={() => setHoldingSortDirection(holdingSortDirection === 'asc' ? 'desc' : 'asc')}
+              className="px-3 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white hover:bg-slate-700 transition-colors text-sm"
+              title={holdingSortDirection === 'asc' ? 'Ascending' : 'Descending'}
+            >
+              {holdingSortDirection === 'asc' ? '↑' : '↓'}
+            </button>
+          </div>
         </div>
 
         {/* Holdings Table - All Metrics */}
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="bg-slate-700 border-b border-slate-600">
-              <tr>
-                <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-10">Ticker</th>
-                <th className="text-left py-3 px-3 font-semibold text-white">Company Name</th>
-                <th className="text-right py-3 px-3 font-semibold text-white border-r border-slate-600">Weight</th>
-                <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">P/E NTM</th>
-                <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">EV/EBITDA NTM</th>
-                <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white">EV/REVS NTM</th>
-              </tr>
-              <tr className="bg-slate-700/50 border-b-2 border-slate-600">
-                <th className="py-2 px-3"></th>
-                <th className="py-2 px-3"></th>
-                <th className="py-2 px-3 border-r border-slate-600"></th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
-                <th className="text-center py-2 px-2 text-slate-400 font-medium">Max</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {sectorHoldings[selectedSector]?.map((holding) => {
-                const valuation = holdingsValuations.find(v => v.ticker === holding.ticker)
+          {holdingsLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+            </div>
+          ) : sortedSectorHoldings.length === 0 ? (
+            <div className="flex items-center justify-center p-12 text-slate-400">
+              No holdings data available for this sector
+            </div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-slate-700 border-b border-slate-600">
+                <tr>
+                  <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-10">Ticker</th>
+                  <th className="text-left py-3 px-3 font-semibold text-white">Company Name</th>
+                  <th className="text-right py-3 px-3 font-semibold text-white">Weight</th>
+                  <th className="text-center py-3 px-3 font-semibold text-white border-r border-slate-600">Clockwise Holding</th>
+                  <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">P/E NTM</th>
+                  <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">EV/EBITDA NTM</th>
+                  <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white">EV/REVS NTM</th>
+                </tr>
+                <tr className="bg-slate-700/50 border-b-2 border-slate-600">
+                  <th className="py-2 px-3"></th>
+                  <th className="py-2 px-3"></th>
+                  <th className="py-2 px-3"></th>
+                  <th className="py-2 px-3 border-r border-slate-600"></th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium border-r border-slate-600">Max</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
+                  <th className="text-center py-2 px-2 text-slate-400 font-medium">Max</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {sortedSectorHoldings.map((holding) => {
+                  const valuation = holdingsValuations.find(v => v.ticker === holding.ticker)
 
                 return (
                   <tr key={holding.ticker} className="hover:bg-slate-700/50 transition-colors">
@@ -349,8 +558,17 @@ export default function SectorsPage() {
                     <td className="py-3 px-3 text-slate-300">
                       {holding.name}
                     </td>
-                    <td className="text-right py-3 px-3 font-medium text-blue-400 border-r border-slate-700">
-                      {holding.weight.toFixed(1)}%
+                    <td className="text-right py-3 px-3 font-medium text-blue-400">
+                      {holding.weight.toFixed(2)}%
+                    </td>
+                    <td className="text-center py-3 px-3 border-r border-slate-700">
+                      {holding.isClockwiseHolding ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-900/50 text-green-300 border border-green-700">
+                          ✓ Yes
+                        </span>
+                      ) : (
+                        <span className="text-slate-500">-</span>
+                      )}
                     </td>
                     {/* P/E NTM */}
                     <td className="text-center py-3 px-2 text-slate-300">
@@ -394,9 +612,142 @@ export default function SectorsPage() {
                   </tr>
                 )
               })}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          )}
         </div>
+      </div>
+
+      {/* Single Ticker Search Section */}
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl">
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-white">
+            Single Ticker View
+          </h2>
+          <p className="text-sm text-slate-400 mt-1">
+            Search for a specific ticker to view all valuation metrics
+          </p>
+        </div>
+
+        <form onSubmit={handleTickerSearch} className="flex items-center gap-3 mb-6">
+          <input
+            type="text"
+            value={searchTicker}
+            onChange={(e) => setSearchTicker(e.target.value.toUpperCase())}
+            placeholder="Enter Ticker (e.g., AAPL)"
+            className="flex-grow px-4 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            disabled={tickerLoading}
+          >
+            {tickerLoading ? 'Searching...' : 'Search'}
+          </button>
+        </form>
+
+        {tickerLoading && (
+          <div className="flex items-center justify-center p-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          </div>
+        )}
+
+        {tickerError && (
+          <div className="p-4 text-red-400 bg-red-900/30 rounded-lg mb-4">
+            {tickerError}
+          </div>
+        )}
+
+        {tickerData && (
+          <div>
+            <h3 className="text-xl font-semibold text-white mb-4 pb-3 border-b border-slate-700">
+              {tickerData.ticker} - Valuation Metrics
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* P/E NTM Section */}
+              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                <h4 className="text-sm font-semibold text-blue-400 mb-3 pb-2 border-b border-slate-700">P/E NTM</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Current:</span>
+                    <span className="text-white font-medium">{tickerData.pe_ntm !== null ? tickerData.pe_ntm.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">3-yr Avg:</span>
+                    <span className="text-white font-medium">{tickerData.pe_avg !== null ? tickerData.pe_avg.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">3-yr Median:</span>
+                    <span className="text-white font-medium">{tickerData.pe_median !== null ? tickerData.pe_median.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Min:</span>
+                    <span className="text-white font-medium">{tickerData.pe_min !== null ? tickerData.pe_min.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Max:</span>
+                    <span className="text-white font-medium">{tickerData.pe_max !== null ? tickerData.pe_max.toFixed(1) : '-'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* EV/EBITDA NTM Section */}
+              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                <h4 className="text-sm font-semibold text-green-400 mb-3 pb-2 border-b border-slate-700">EV/EBITDA NTM</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Current:</span>
+                    <span className="text-white font-medium">{tickerData.ev_ebitda_ntm !== null ? tickerData.ev_ebitda_ntm.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">3-yr Avg:</span>
+                    <span className="text-white font-medium">{tickerData.ev_ebitda_avg !== null ? tickerData.ev_ebitda_avg.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">3-yr Median:</span>
+                    <span className="text-white font-medium">{tickerData.ev_ebitda_median !== null ? tickerData.ev_ebitda_median.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Min:</span>
+                    <span className="text-white font-medium">{tickerData.ev_ebitda_min !== null ? tickerData.ev_ebitda_min.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Max:</span>
+                    <span className="text-white font-medium">{tickerData.ev_ebitda_max !== null ? tickerData.ev_ebitda_max.toFixed(1) : '-'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* EV/REVS NTM Section */}
+              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                <h4 className="text-sm font-semibold text-purple-400 mb-3 pb-2 border-b border-slate-700">EV/REVS NTM</h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Current:</span>
+                    <span className="text-white font-medium">{tickerData.ev_sales_ntm !== null ? tickerData.ev_sales_ntm.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">3-yr Avg:</span>
+                    <span className="text-white font-medium">{tickerData.ev_sales_avg !== null ? tickerData.ev_sales_avg.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">3-yr Median:</span>
+                    <span className="text-white font-medium">{tickerData.ev_sales_median !== null ? tickerData.ev_sales_median.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Min:</span>
+                    <span className="text-white font-medium">{tickerData.ev_sales_min !== null ? tickerData.ev_sales_min.toFixed(1) : '-'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400 text-sm">Max:</span>
+                    <span className="text-white font-medium">{tickerData.ev_sales_max !== null ? tickerData.ev_sales_max.toFixed(1) : '-'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
