@@ -554,16 +554,18 @@ export function calculateBenchmarkRelativeScores(
     peRatioScore: calculateBenchmarkRelativeScore(stockMetrics.peRatio, benchmarkMetrics.peRatio, true),
     evEbitdaScore: calculateBenchmarkRelativeScore(stockMetrics.evEbitda, benchmarkMetrics.evEbitda, true),
     evSalesScore: calculateBenchmarkRelativeScore(stockMetrics.evSales, benchmarkMetrics.evSales, true),
-    targetPriceUpsideScore: calculateBenchmarkRelativeScore(stockMetrics.targetPriceUpside, benchmarkMetrics.targetPriceUpside, false),
+    // Target Price Upside: ETFs don't have price targets, will be calculated via percentile ranking
+    targetPriceUpsideScore: null,
     
     // MOMENTUM scores (higher is better)
     return12MEx1MScore: calculateBenchmarkRelativeScore(stockMetrics.return12MEx1M, benchmarkMetrics.return12MEx1M, false),
     return3MScore: calculateBenchmarkRelativeScore(stockMetrics.return3M, benchmarkMetrics.return3M, false),
     pct52WeekHighScore: calculateBenchmarkRelativeScore(stockMetrics.pct52WeekHigh, benchmarkMetrics.pct52WeekHigh, false),
-    epsSurpriseScore: calculateBenchmarkRelativeScore(stockMetrics.epsSurprise, benchmarkMetrics.epsSurprise, false),
-    revSurpriseScore: calculateBenchmarkRelativeScore(stockMetrics.revSurprise, benchmarkMetrics.revSurprise, false),
-    ntmEpsChangeScore: calculateBenchmarkRelativeScore(stockMetrics.ntmEpsChange, benchmarkMetrics.ntmEpsChange, false),
-    ntmRevChangeScore: calculateBenchmarkRelativeScore(stockMetrics.ntmRevChange, benchmarkMetrics.ntmRevChange, false),
+    // EPS/Rev metrics: ETFs don't have earnings/revenue, will be calculated via percentile ranking
+    epsSurpriseScore: null,
+    revSurpriseScore: null,
+    ntmEpsChangeScore: null,
+    ntmRevChangeScore: null,
     
     // QUALITY scores - will be calculated separately using percentile ranking (N/A for now)
     roicTTMScore: null,

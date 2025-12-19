@@ -30,7 +30,7 @@ interface SectorHolding {
 
 type SortColumn = 'ticker' | 'pe_avg' | 'ev_ebitda_avg' | 'ev_sales_avg'
 type SortDirection = 'asc' | 'desc'
-type HoldingSortColumn = 'ticker' | 'name' | 'weight'
+type HoldingSortColumn = 'ticker' | 'name' | 'weight' | 'pe_avg' | 'ev_ebitda_avg' | 'ev_sales_avg'
 
 export default function SectorsPage() {
   const [selectedSector, setSelectedSector] = useState('SPY')
@@ -47,12 +47,6 @@ export default function SectorsPage() {
   // Sorting state for Sector Holdings table
   const [holdingSortColumn, setHoldingSortColumn] = useState<HoldingSortColumn>('weight')
   const [holdingSortDirection, setHoldingSortDirection] = useState<SortDirection>('desc')
-  
-  // Single Ticker Search state
-  const [searchTicker, setSearchTicker] = useState('')
-  const [tickerData, setTickerData] = useState<SectorValuation | null>(null)
-  const [tickerLoading, setTickerLoading] = useState(false)
-  const [tickerError, setTickerError] = useState<string | null>(null)
 
   // Fetch sector valuations on mount
   useEffect(() => {
@@ -156,57 +150,6 @@ export default function SectorsPage() {
     }
   }
 
-  const handleTickerSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!searchTicker.trim()) {
-      setTickerError('Please enter a ticker symbol')
-      return
-    }
-
-    setTickerLoading(true)
-    setTickerError(null)
-    setTickerData(null)
-
-    try {
-      const response = await fetch(`/api/sector-valuations?tickers=${searchTicker.toUpperCase()}`)
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success && result.data && result.data.length > 0) {
-          const d = result.data[0]
-          const formatted: SectorValuation = {
-            ticker: d.Ticker,
-            pe_ntm: parseFloat(d['P/E NTM']) || null,
-            pe_avg: parseFloat(d['3-YR AVG NTM P/E']) || null,
-            pe_median: parseFloat(d['3-YR MEDIAN NTM P/E']) || null,
-            pe_min: parseFloat(d['3-YR MIN NTM P/E']) || null,
-            pe_max: parseFloat(d['3-YR MAX NTM P/E']) || null,
-            ev_ebitda_ntm: parseFloat(d['EV/EBITDA - NTM']) || null,
-            ev_ebitda_avg: parseFloat(d['3-YR AVG NTM EV/EBITDA']) || null,
-            ev_ebitda_median: parseFloat(d['3-YR MEDIAN NTM EV/EBITDA']) || null,
-            ev_ebitda_min: parseFloat(d['3-YR MIN NTM EV/EBITDA']) || null,
-            ev_ebitda_max: parseFloat(d['3-YR MAX NTM EV/EBITDA']) || null,
-            ev_sales_ntm: parseFloat(d['EV/Sales - NTM']) || null,
-            ev_sales_avg: parseFloat(d['3-YR AVG NTM EV/SALES']) || null,
-            ev_sales_median: parseFloat(d['3-YR MEDIAN NTM EV/SALES']) || null,
-            ev_sales_min: parseFloat(d['3-YR MIN NTM EV/SALES']) || null,
-            ev_sales_max: parseFloat(d['3-YR MAX NTM EV/SALES']) || null,
-          }
-          setTickerData(formatted)
-        } else {
-          setTickerError(`No data found for ticker: ${searchTicker.toUpperCase()}`)
-        }
-      } else {
-        setTickerError('Failed to fetch ticker data')
-      }
-    } catch (error) {
-      setTickerError('Error fetching ticker data')
-      console.error(error)
-    } finally {
-      setTickerLoading(false)
-    }
-  }
-
   // Sector display names
   const sectorNames: Record<string, string> = {
     'SPY': 'S&P 500',
@@ -294,6 +237,24 @@ export default function SectorsPage() {
       case 'weight':
         aVal = a.weight
         bVal = b.weight
+        break
+      case 'pe_avg':
+        const aValuationPE = holdingsValuations.find(v => v.ticker === a.ticker)
+        const bValuationPE = holdingsValuations.find(v => v.ticker === b.ticker)
+        aVal = aValuationPE?.pe_avg ?? Infinity
+        bVal = bValuationPE?.pe_avg ?? Infinity
+        break
+      case 'ev_ebitda_avg':
+        const aValuationEBITDA = holdingsValuations.find(v => v.ticker === a.ticker)
+        const bValuationEBITDA = holdingsValuations.find(v => v.ticker === b.ticker)
+        aVal = aValuationEBITDA?.ev_ebitda_avg ?? Infinity
+        bVal = bValuationEBITDA?.ev_ebitda_avg ?? Infinity
+        break
+      case 'ev_sales_avg':
+        const aValuationSales = holdingsValuations.find(v => v.ticker === a.ticker)
+        const bValuationSales = holdingsValuations.find(v => v.ticker === b.ticker)
+        aVal = aValuationSales?.ev_sales_avg ?? Infinity
+        bVal = bValuationSales?.ev_sales_avg ?? Infinity
         break
     }
 
@@ -494,6 +455,9 @@ export default function SectorsPage() {
               <option value="weight">Weight</option>
               <option value="ticker">Ticker</option>
               <option value="name">Company Name</option>
+              <option value="pe_avg">P/E Avg</option>
+              <option value="ev_ebitda_avg">EV/EBITDA Avg</option>
+              <option value="ev_sales_avg">EV/Sales Avg</option>
             </select>
             <button
               onClick={() => setHoldingSortDirection(holdingSortDirection === 'asc' ? 'desc' : 'asc')}
@@ -616,138 +580,6 @@ export default function SectorsPage() {
             </table>
           )}
         </div>
-      </div>
-
-      {/* Single Ticker Search Section */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 shadow-xl">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-white">
-            Single Ticker View
-          </h2>
-          <p className="text-sm text-slate-400 mt-1">
-            Search for a specific ticker to view all valuation metrics
-          </p>
-        </div>
-
-        <form onSubmit={handleTickerSearch} className="flex items-center gap-3 mb-6">
-          <input
-            type="text"
-            value={searchTicker}
-            onChange={(e) => setSearchTicker(e.target.value.toUpperCase())}
-            placeholder="Enter Ticker (e.g., AAPL)"
-            className="flex-grow px-4 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button
-            type="submit"
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            disabled={tickerLoading}
-          >
-            {tickerLoading ? 'Searching...' : 'Search'}
-          </button>
-        </form>
-
-        {tickerLoading && (
-          <div className="flex items-center justify-center p-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          </div>
-        )}
-
-        {tickerError && (
-          <div className="p-4 text-red-400 bg-red-900/30 rounded-lg mb-4">
-            {tickerError}
-          </div>
-        )}
-
-        {tickerData && (
-          <div>
-            <h3 className="text-xl font-semibold text-white mb-4 pb-3 border-b border-slate-700">
-              {tickerData.ticker} - Valuation Metrics
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* P/E NTM Section */}
-              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                <h4 className="text-sm font-semibold text-blue-400 mb-3 pb-2 border-b border-slate-700">P/E NTM</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Current:</span>
-                    <span className="text-white font-medium">{tickerData.pe_ntm !== null ? tickerData.pe_ntm.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">3-yr Avg:</span>
-                    <span className="text-white font-medium">{tickerData.pe_avg !== null ? tickerData.pe_avg.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">3-yr Median:</span>
-                    <span className="text-white font-medium">{tickerData.pe_median !== null ? tickerData.pe_median.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Min:</span>
-                    <span className="text-white font-medium">{tickerData.pe_min !== null ? tickerData.pe_min.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Max:</span>
-                    <span className="text-white font-medium">{tickerData.pe_max !== null ? tickerData.pe_max.toFixed(1) : '-'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* EV/EBITDA NTM Section */}
-              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                <h4 className="text-sm font-semibold text-green-400 mb-3 pb-2 border-b border-slate-700">EV/EBITDA NTM</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Current:</span>
-                    <span className="text-white font-medium">{tickerData.ev_ebitda_ntm !== null ? tickerData.ev_ebitda_ntm.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">3-yr Avg:</span>
-                    <span className="text-white font-medium">{tickerData.ev_ebitda_avg !== null ? tickerData.ev_ebitda_avg.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">3-yr Median:</span>
-                    <span className="text-white font-medium">{tickerData.ev_ebitda_median !== null ? tickerData.ev_ebitda_median.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Min:</span>
-                    <span className="text-white font-medium">{tickerData.ev_ebitda_min !== null ? tickerData.ev_ebitda_min.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Max:</span>
-                    <span className="text-white font-medium">{tickerData.ev_ebitda_max !== null ? tickerData.ev_ebitda_max.toFixed(1) : '-'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* EV/REVS NTM Section */}
-              <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
-                <h4 className="text-sm font-semibold text-purple-400 mb-3 pb-2 border-b border-slate-700">EV/REVS NTM</h4>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Current:</span>
-                    <span className="text-white font-medium">{tickerData.ev_sales_ntm !== null ? tickerData.ev_sales_ntm.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">3-yr Avg:</span>
-                    <span className="text-white font-medium">{tickerData.ev_sales_avg !== null ? tickerData.ev_sales_avg.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">3-yr Median:</span>
-                    <span className="text-white font-medium">{tickerData.ev_sales_median !== null ? tickerData.ev_sales_median.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Min:</span>
-                    <span className="text-white font-medium">{tickerData.ev_sales_min !== null ? tickerData.ev_sales_min.toFixed(1) : '-'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400 text-sm">Max:</span>
-                    <span className="text-white font-medium">{tickerData.ev_sales_max !== null ? tickerData.ev_sales_max.toFixed(1) : '-'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

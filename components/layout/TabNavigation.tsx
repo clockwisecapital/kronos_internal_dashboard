@@ -12,6 +12,7 @@ const tabs = [
   { name: 'Exposure', path: '/exposure' },
   { name: 'Trading', path: '/trading' },
   { name: 'Sectors', path: '/sectors' },
+  { name: 'Ticker View', path: '/ticker-view' },
   { name: 'Risk', path: '/risk' },
   { name: 'Scoring', path: '/scoring' },
   { name: 'Market', path: '/market' },

@@ -2,7 +2,7 @@
 // Calculates sector exposure, index vs non-index, core/non-core, risk on/off, and long/short/net
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@/app/utils/supabase/server'
+import { createServiceRoleClient } from '@/app/utils/supabase/service-role'
 import {
   getLatestHoldingsDate,
   deduplicateByTicker,
@@ -105,6 +105,23 @@ interface ExposureResponse {
   timestamp: string
 }
 
+// ===== CONSTANTS =====
+
+// Hardcoded GICS sectors and their associated index symbols
+const GICS_SECTORS = [
+  { sector: 'Information Technology', index: 'xlk' },
+  { sector: 'Financials', index: 'xlf' },
+  { sector: 'Communication Services', index: 'xlc' },
+  { sector: 'Consumer Discretionary', index: 'xly' },
+  { sector: 'Consumer Staples', index: 'xlp' },
+  { sector: 'Energy', index: 'xle' },
+  { sector: 'Health Care', index: 'xlv' },
+  { sector: 'Industrials', index: 'xli' },
+  { sector: 'Materials', index: 'xlb' },
+  { sector: 'Real Estate', index: 'xlre' },
+  { sector: 'Utilities', index: 'xlu' }
+]
+
 // ===== HELPER FUNCTIONS =====
 
 // Detect cash positions (money market funds, etc.)
@@ -136,7 +153,7 @@ function calculateIndexExposure(
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createClient()
+    const supabase = createServiceRoleClient()
     
     console.log('=== Exposure API: Starting calculations ===')
 
@@ -203,23 +220,43 @@ export async function GET(request: Request) {
 
     console.log(`Loaded ${weightingsMap.size} weightings`)
 
-    // 4. Fetch GICS/Yahoo Finance data for benchmark mapping
-    const tickers = holdingsData.map(h => h.stock_ticker)
-    const { data: gicsData, error: gicsError } = await supabase
+    // 4. Fetch ALL GICS data to create a ticker-to-sector map
+    const { data: allGicsData, error: gicsError } = await supabase
       .from('gics_yahoo_finance')
-      .select('"Ticker", "Company Name", "GICS Sector", "BENCHMARK1", "Risk on/off Score", "Core / Non-Core"')
-      .in('"Ticker"', tickers)
+      .select('"Ticker", "GICS Sector", "Risk on/off Score", "Core / Non-Core"')
 
     if (gicsError) {
       console.warn('Failed to fetch GICS data:', gicsError.message)
     }
 
-    const gicsMap = new Map<string, GICSData>()
-    gicsData?.forEach((g: any) => {
-      gicsMap.set(g.Ticker.toUpperCase(), g)
+    console.log(`Loaded ${allGicsData?.length || 0} rows from gics_yahoo_finance table`)
+    
+    if (allGicsData && allGicsData.length > 0) {
+      console.log('Sample GICS entries:', allGicsData.slice(0, 3).map(g => ({ 
+        ticker: g.Ticker, 
+        sector: g['GICS Sector'] 
+      })))
+    }
+
+    // Create a map of ticker -> GICS data
+    const tickerToGicsMap = new Map<string, GICSData>()
+    allGicsData?.forEach((g: any) => {
+      tickerToGicsMap.set(g.Ticker.toUpperCase(), g)
     })
 
-    console.log(`Loaded GICS data for ${gicsMap.size} tickers`)
+    console.log(`Created ticker-to-GICS map with ${tickerToGicsMap.size} entries`)
+    
+    // Log a few portfolio tickers to see if they exist in GICS map
+    const samplePortfolioTickers = holdingsData.slice(0, 5).map(h => h.stock_ticker.toUpperCase())
+    console.log('Sample portfolio tickers:', samplePortfolioTickers.join(', '))
+    samplePortfolioTickers.forEach(ticker => {
+      const gicsData = tickerToGicsMap.get(ticker)
+      if (gicsData) {
+        console.log(`  ${ticker}: ${gicsData['GICS Sector']}`)
+      } else {
+        console.log(`  ${ticker}: NOT FOUND in GICS map`)
+      }
+    })
 
     // 5. Calculate net weights for each holding
     const netWeightMap = new Map<string, number>()
@@ -243,58 +280,76 @@ export async function GET(request: Request) {
       netWeightMap.set(holding.stock_ticker.toUpperCase(), netWeight)
     })
 
-    // 6. Group by benchmark and calculate sector exposure
-    const sectorMap = new Map<string, {
-      gics: string
+    // 6. Calculate exposure by GICS Sector (using hardcoded sectors)
+    const sectorExposureData: Array<{
+      sector: string
+      index: string
       current_weight: number
       net_weight: number
-      holdings: Array<{ ticker: string; weight: number; netWeight: number; gics: GICSData | undefined; weighting: WeightingData | undefined }>
-    }>()
+      holdings: Array<{ ticker: string; weight: number; netWeight: number }>
+      allSectorTickers: string[]
+    }> = []
 
     // Initialize cash tracking
     let cashWeight = 0
-
+    
+    // Track cash positions first
     holdingsData.forEach(holding => {
-      const gics = gicsMap.get(holding.stock_ticker.toUpperCase())
-      const weighting = weightingsMap.get(holding.stock_ticker.toUpperCase())
-      const netWeight = netWeightMap.get(holding.stock_ticker.toUpperCase()) || 0
-
-      // Check if this is a cash position
       if (isCashPosition(holding.stock_ticker)) {
         cashWeight += holding.weight
-        return
       }
-
-      const benchmark = gics?.BENCHMARK1 || 'Unknown'
-      const gicsSector = gics?.['GICS Sector'] || 'Unknown'
-
-      if (!sectorMap.has(benchmark)) {
-        sectorMap.set(benchmark, {
-          gics: gicsSector,
-          current_weight: 0,
-          net_weight: 0,
-          holdings: []
-        })
-      }
-
-      const sector = sectorMap.get(benchmark)!
-      sector.current_weight += holding.weight
-      sector.net_weight += netWeight
-      sector.holdings.push({
-        ticker: holding.stock_ticker,
-        weight: holding.weight,
-        netWeight,
-        gics,
-        weighting
-      })
     })
 
-    // 7. Calculate index weightings for ALL tickers in each benchmark
+    // For each hardcoded GICS sector, calculate weights
+    for (const { sector, index } of GICS_SECTORS) {
+      // Find all tickers in the database that belong to this sector
+      const { data: sectorTickers } = await supabase
+        .from('gics_yahoo_finance')
+        .select('"Ticker"')
+        .eq('"GICS Sector"', sector)
+
+      const allSectorTickers = sectorTickers?.map(t => t.Ticker.toUpperCase()) || []
+      
+      // Find which holdings belong to this sector
+      let sectorCurrentWeight = 0
+      let sectorNetWeight = 0
+      const sectorHoldings: Array<{ ticker: string; weight: number; netWeight: number }> = []
+
+      holdingsData.forEach(holding => {
+        const tickerUpper = holding.stock_ticker.toUpperCase()
+        const gicsData = tickerToGicsMap.get(tickerUpper)
+        
+        if (gicsData?.['GICS Sector'] === sector && !isCashPosition(holding.stock_ticker)) {
+          const netWeight = netWeightMap.get(tickerUpper) || 0
+          sectorCurrentWeight += holding.weight
+          sectorNetWeight += netWeight
+          sectorHoldings.push({
+            ticker: holding.stock_ticker,
+            weight: holding.weight,
+            netWeight
+          })
+        }
+      })
+
+      // Only add sector if it has holdings
+      if (sectorCurrentWeight > 0) {
+        sectorExposureData.push({
+          sector,
+          index,
+          current_weight: sectorCurrentWeight,
+          net_weight: sectorNetWeight,
+          holdings: sectorHoldings,
+          allSectorTickers
+        })
+      }
+    }
+
+    // 7. Calculate index weightings for ALL tickers in each GICS Sector
     // Also calculate in-index vs non-index exposure
     const exposureRows: ExposureRow[] = []
 
-    for (const [benchmark, sector] of sectorMap.entries()) {
-      // Calculate index weightings by summing ALL tickers in each index that match this benchmark
+    for (const sectorData of sectorExposureData) {
+      // Calculate index weightings by summing ALL tickers in each index that match this GICS Sector
       let spyWeighting = 0
       let qqqWeighting = 0
       let igvWeighting = 0
@@ -302,16 +357,8 @@ export async function GET(request: Request) {
       let smhWeighting = 0
       let arkkWeighting = 0
 
-      // Get all tickers from weightings table that belong to this benchmark
-      const { data: allGicsForBenchmark } = await supabase
-        .from('gics_yahoo_finance')
-        .select('"Ticker"')
-        .eq('"BENCHMARK1"', benchmark)
-
-      const benchmarkTickers = allGicsForBenchmark?.map((g: any) => g.Ticker.toUpperCase()) || []
-
-      // Sum weights for all tickers in this benchmark across all indices
-      benchmarkTickers.forEach(ticker => {
+      // Sum weights for all tickers in this GICS Sector across all indices
+      sectorData.allSectorTickers.forEach(ticker => {
         const weighting = weightingsMap.get(ticker)
         if (weighting) {
           spyWeighting += weighting.spy || 0
@@ -327,18 +374,19 @@ export async function GET(request: Request) {
       let inIndexTotal = 0
       let notInIndexTotal = 0
 
-      sector.holdings.forEach(holding => {
-        const qqqWeight = holding.weighting?.qqq || 0
+      sectorData.holdings.forEach(holding => {
+        const weighting = weightingsMap.get(holding.ticker.toUpperCase())
+        const qqqWeight = weighting?.qqq || 0
         const { inIndex, notInIndex } = calculateIndexExposure(holding.weight, qqqWeight, 'QQQ')
         inIndexTotal += inIndex
         notInIndexTotal += notInIndex
       })
 
       exposureRows.push({
-        gics: sector.gics,
-        index: benchmark,
-        current_weight: sector.current_weight,
-        net_weight: sector.net_weight,
+        gics: sectorData.sector,
+        index: sectorData.index,
+        current_weight: sectorData.current_weight,
+        net_weight: sectorData.net_weight,
         spy_weighting: spyWeighting,
         qqq_weighting: qqqWeighting,
         in_index: inIndexTotal,
@@ -414,7 +462,9 @@ export async function GET(request: Request) {
     let nonCoreWeight = 0
 
     holdingsData.forEach(holding => {
-      const gics = gicsMap.get(holding.stock_ticker.toUpperCase())
+      if (isCashPosition(holding.stock_ticker)) return
+      
+      const gics = tickerToGicsMap.get(holding.stock_ticker.toUpperCase())
       const coreNonCore = gics?.['Core / Non-Core']
 
       if (coreNonCore === 'Core' || coreNonCore === 'CORE') {
@@ -434,7 +484,9 @@ export async function GET(request: Request) {
     let riskOffWeight = 0
 
     holdingsData.forEach(holding => {
-      const gics = gicsMap.get(holding.stock_ticker.toUpperCase())
+      if (isCashPosition(holding.stock_ticker)) return
+      
+      const gics = tickerToGicsMap.get(holding.stock_ticker.toUpperCase())
       const riskScore = gics?.['Risk on/off Score']
 
       if (riskScore === 'Risk On' || riskScore === 'RISK ON') {
@@ -463,7 +515,7 @@ export async function GET(request: Request) {
     }
 
     console.log('=== Exposure API: Calculations complete ===')
-    console.log(`Sectors: ${sectorMap.size}`)
+    console.log(`GICS Sectors with holdings: ${sectorExposureData.length}`)
     console.log(`Composition - Core: ${coreWeight.toFixed(2)}%, Non-Core: ${nonCoreWeight.toFixed(2)}%`)
     console.log(`Bias - Risk On: ${riskOnWeight.toFixed(2)}%, Risk Off: ${riskOffWeight.toFixed(2)}%`)
     console.log(`Exposure - Long: ${longWeight.toFixed(2)}%, Short: ${shortWeight.toFixed(2)}%, Net: ${exposure.net_exposure.toFixed(2)}%`)
@@ -493,4 +545,5 @@ export async function GET(request: Request) {
     )
   }
 }
+
 

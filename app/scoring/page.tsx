@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import ScoreCell from '@/components/scoring/ScoreCell'
 import CompositeScoreCard from '@/components/scoring/CompositeScoreCard'
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 
 interface StockScore {
   ticker: string
@@ -93,10 +94,24 @@ export default function ScoringPage() {
   const [sortField, setSortField] = useState<keyof StockScore>('ticker')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  
+  // Universe table state
+  const [universeData, setUniverseData] = useState<StockScore[]>([])
+  const [universeLoading, setUniverseLoading] = useState(false)
+  const [universeError, setUniverseError] = useState<string | null>(null)
+  const [universePage, setUniversePage] = useState(1)
+  const [universePageSize, setUniversePageSize] = useState(50)
+  const [universeTotalCount, setUniverseTotalCount] = useState(0)
+  const [universeTotalPages, setUniverseTotalPages] = useState(0)
+  const [universeExpandedRow, setUniverseExpandedRow] = useState<string | null>(null)
 
   useEffect(() => {
     fetchScores()
   }, [profile, benchmark])
+
+  useEffect(() => {
+    fetchUniverseData()
+  }, [profile, benchmark, universePage, universePageSize])
 
   const fetchScores = async () => {
     try {
@@ -117,6 +132,31 @@ export default function ScoringPage() {
       setError(err instanceof Error ? err.message : 'Failed to load scoring data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchUniverseData = async () => {
+    try {
+      setUniverseLoading(true)
+      setUniverseError(null)
+      
+      const response = await fetch(
+        `/api/scoring/universe?profile=${profile}&benchmark=${benchmark}&page=${universePage}&pageSize=${universePageSize}`
+      )
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch universe data')
+      }
+      
+      const result = await response.json()
+      setUniverseData(result.scores || [])
+      setUniverseTotalCount(result.pagination?.totalCount || 0)
+      setUniverseTotalPages(result.pagination?.totalPages || 0)
+    } catch (err) {
+      console.error('Error fetching universe data:', err)
+      setUniverseError(err instanceof Error ? err.message : 'Failed to load universe data')
+    } finally {
+      setUniverseLoading(false)
     }
   }
 
@@ -280,8 +320,8 @@ export default function ScoringPage() {
             </thead>
             <tbody className="bg-slate-800 divide-y divide-slate-700">
               {sortedScores.map((stock) => (
-                <>
-                  <tr key={stock.ticker} className="hover:bg-slate-700/50">
+                <React.Fragment key={stock.ticker}>
+                  <tr className="hover:bg-slate-700/50">
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-medium text-white">{stock.ticker}</div>
                     </td>
@@ -378,11 +418,231 @@ export default function ScoringPage() {
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Universe Scoring Table */}
+      <div className="mt-12">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-white mb-2">Universe Scoring</h2>
+          <p className="text-slate-400">
+            {universeTotalCount} tickers • Profile: {profile} • Benchmark: {benchmark.replace('BENCHMARK', 'Benchmark ')}
+          </p>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <select
+              value={universePageSize}
+              onChange={(e) => {
+                setUniversePageSize(Number(e.target.value))
+                setUniversePage(1)
+              }}
+              className="px-4 py-2 bg-slate-800 text-white rounded-lg border border-slate-600 focus:outline-none focus:border-blue-500"
+            >
+              <option value={25}>25 per page</option>
+              <option value={50}>50 per page</option>
+              <option value={100}>100 per page</option>
+            </select>
+            <span className="text-slate-400 text-sm">
+              Showing {((universePage - 1) * universePageSize) + 1} to{' '}
+              {Math.min(universePage * universePageSize, universeTotalCount)} of{' '}
+              {universeTotalCount}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setUniversePage(1)}
+              disabled={universePage === 1 || universeLoading}
+              className="p-2 rounded bg-slate-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-700"
+            >
+              <ChevronsLeft className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setUniversePage(prev => Math.max(1, prev - 1))}
+              disabled={universePage === 1 || universeLoading}
+              className="p-2 rounded bg-slate-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-700"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+            
+            <span className="px-4 py-2 text-white">
+              Page {universePage} of {universeTotalPages}
+            </span>
+            
+            <button
+              onClick={() => setUniversePage(prev => Math.min(universeTotalPages, prev + 1))}
+              disabled={universePage === universeTotalPages || universeLoading}
+              className="p-2 rounded bg-slate-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-700"
+            >
+              <ChevronRight className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setUniversePage(universeTotalPages)}
+              disabled={universePage === universeTotalPages || universeLoading}
+              className="p-2 rounded bg-slate-800 text-white disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-700"
+            >
+              <ChevronsRight className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Loading / Error / Table */}
+        {universeLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+              <p className="text-slate-400">Loading universe data...</p>
+            </div>
+          </div>
+        ) : universeError ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center text-red-400">
+              <p className="text-lg font-semibold mb-2">Error loading universe data</p>
+              <p className="text-sm">{universeError}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-slate-700">
+            <table className="min-w-full divide-y divide-slate-700">
+              <thead className="bg-slate-800">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    Ticker
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    Benchmark
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    VALUE
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    MOMENTUM
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    QUALITY
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    RISK
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    TOTAL
+                  </th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-slate-300 uppercase tracking-wider">
+                    Details
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-slate-800 divide-y divide-slate-700">
+                {universeData.map((stock) => (
+                  <React.Fragment key={stock.ticker}>
+                    <tr className="hover:bg-slate-700/50">
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="font-medium text-white">{stock.ticker}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-left text-sm text-slate-300">
+                        {benchmark === 'BENCHMARK1' ? (stock.benchmark1 || 'N/A') :
+                         benchmark === 'BENCHMARK2' ? (stock.benchmark2 || 'N/A') :
+                         benchmark === 'BENCHMARK3' ? (stock.benchmark3 || 'N/A') :
+                         (stock.benchmarkCustom || 'N/A')}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <ScoreCell score={stock.valueScore} />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <ScoreCell score={stock.momentumScore} />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <ScoreCell score={stock.qualityScore} />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <ScoreCell score={stock.riskScore} />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <ScoreCell score={stock.totalScore} />
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                        <button
+                          onClick={() => setUniverseExpandedRow(universeExpandedRow === stock.ticker ? null : stock.ticker)}
+                          className="text-blue-400 hover:text-blue-300 transition-colors text-sm font-medium"
+                        >
+                          Show
+                        </button>
+                      </td>
+                    </tr>
+                    
+                    {/* Expanded Row with Details */}
+                    {universeExpandedRow === stock.ticker && (
+                      <tr>
+                        <td colSpan={8} className="px-4 py-6 bg-slate-900/50">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* VALUE Details */}
+                            <CompositeScoreCard
+                              title="VALUE"
+                              compositeScore={stock.valueScore}
+                              metrics={[
+                                { name: 'P/E Ratio', value: stock.peRatio, score: stock.peRatioScore, format: 'ratio' },
+                                { name: 'EV/EBITDA', value: stock.evEbitda, score: stock.evEbitdaScore, format: 'ratio' },
+                                { name: 'EV/Sales', value: stock.evSales, score: stock.evSalesScore, format: 'ratio' },
+                                { name: 'Target Price Upside', value: stock.targetPriceUpside, score: stock.targetPriceUpsideScore, format: 'ratio' }
+                              ]}
+                            />
+                            
+                            {/* MOMENTUM Details */}
+                            <CompositeScoreCard
+                              title="MOMENTUM"
+                              compositeScore={stock.momentumScore}
+                              metrics={[
+                                { name: '12M Return ex 1M', value: stock.return12MEx1M, score: stock.return12MEx1MScore, format: 'percentage' },
+                                { name: '3M Return', value: stock.return3M, score: stock.return3MScore, format: 'percentage' },
+                                { name: '% of 52-Week High', value: stock.pct52WeekHigh, score: stock.pct52WeekHighScore, format: 'percentage' },
+                                { name: 'EPS Surprise', value: stock.epsSurprise, score: stock.epsSurpriseScore, format: 'percentage' },
+                                { name: 'Rev Surprise', value: stock.revSurprise, score: stock.revSurpriseScore, format: 'percentage' },
+                                { name: 'NTM EPS Change', value: stock.ntmEpsChange, score: stock.ntmEpsChangeScore, format: 'ratio' },
+                                { name: 'NTM Rev Change', value: stock.ntmRevChange, score: stock.ntmRevChangeScore, format: 'ratio' }
+                              ]}
+                            />
+                            
+                            {/* QUALITY Details */}
+                            <CompositeScoreCard
+                              title="QUALITY"
+                              compositeScore={stock.qualityScore}
+                              metrics={[
+                                { name: 'ROIC TTM', value: stock.roicTTM, score: stock.roicTTMScore, format: 'percentage' },
+                                { name: 'Gross Profitability / TA', value: stock.grossProfitability, score: stock.grossProfitabilityScore, format: 'ratio' },
+                                { name: 'Accruals / TA', value: stock.accruals, score: stock.accrualsScore, format: 'percentage', invertColor: true },
+                                { name: 'FCF / TA', value: stock.fcfToAssets, score: stock.fcfToAssetsScore, format: 'ratio' },
+                                { name: 'ROIC 3-Yr', value: stock.roic3Yr, score: stock.roic3YrScore, format: 'percentage' },
+                                { name: 'EBITDA Margin', value: stock.ebitdaMargin, score: stock.ebitdaMarginScore, format: 'percentage' }
+                              ]}
+                            />
+                            
+                            {/* RISK Details */}
+                            <CompositeScoreCard
+                              title="RISK"
+                              compositeScore={stock.riskScore}
+                              metrics={[
+                                { name: 'Beta 3-Yr', value: stock.beta3Yr, score: stock.beta3YrScore, format: 'ratio', invertColor: true },
+                                { name: '30-Day Volatility', value: stock.volatility30Day, score: stock.volatility30DayScore, format: 'percentage', invertColor: true },
+                                { name: 'Max Drawdown', value: stock.maxDrawdown, score: stock.maxDrawdownScore, format: 'percentage', invertColor: true }
+                              ]}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
     </div>

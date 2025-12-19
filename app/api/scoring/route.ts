@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/app/utils/supabase/service-role'
 import {
   extractIndividualMetrics,
   calculatePercentileScores,
+  calculatePercentileRank,
   calculateCompositeScores,
   calculateTotalScore,
   parseScoreWeightings,
@@ -180,7 +181,14 @@ export async function GET(request: Request) {
         "PRICE",
         "1 month volatility",
         "3 yr beta",
-        "52 week high"
+        "52 week high",
+        "Consensus Price Target",
+        "EPS surprise last qtr",
+        "SALES surprise last qtr",
+        "EPS EST NTM",
+        "EPS EST NTM - 30 days ago",
+        "Sales EST NTM",
+        "SALES EST NTM - 30 days ago"
       `)
       .in('Ticker', benchmarkTickers)
     
@@ -269,10 +277,76 @@ export async function GET(request: Request) {
     
     console.log(`Extracted metrics for ${holdingsWithMetrics.length} holdings`)
     
-    // 7. Calculate QUALITY scores using percentile ranking (holdings-relative)
-    console.log('Step 7: Calculating QUALITY percentile scores...')
-    const metricsOnly = holdingsWithMetrics.map(h => h.metrics)
-    const qualityPercentileScores = calculatePercentileScores(metricsOnly)
+    // 7. Fetch ALL universe tickers for percentile calculation
+    console.log('Step 7: Fetching universe data for percentile calculations...')
+    const { data: universeData, error: universeError } = await supabase
+      .from('factset_data_v2')
+      .select(`
+        "Ticker",
+        "EPS EST NTM",
+        "EPS EST NTM - 30 days ago",
+        "EPS surprise last qtr",
+        "Sales LTM",
+        "Sales EST NTM",
+        "SALES EST NTM - 30 days ago",
+        "SALES surprise last qtr",
+        "EBITDA LTM",
+        "PRICE",
+        "Gross Profit LTM",
+        "ROIC 1 YR",
+        "ROIC  3YR",
+        "acrcrurals %",
+        "FCF",
+        "Consensus Price Target",
+        "Total assets"
+      `)
+    
+    if (universeError) {
+      console.error('Universe data fetch error:', universeError)
+      return NextResponse.json({ error: 'Failed to fetch universe data' }, { status: 500 })
+    }
+    
+    console.log(`Loaded ${universeData?.length || 0} universe tickers for percentile calculation`)
+    
+    // Extract metrics from all universe tickers (using dummy Yahoo data since we only need FactSet metrics)
+    const dummyYahoo = { currentPrice: 0, price30DaysAgo: null, price90DaysAgo: null, price365DaysAgo: null, maxDrawdown: null }
+    const universeMetrics = (universeData || []).map(ticker => 
+      extractIndividualMetrics(ticker as FactSetData, dummyYahoo)
+    )
+    
+    // Extract universe-wide metric arrays for percentile calculation
+    const universeTargetPrices = universeMetrics.map(m => m.targetPriceUpside)
+    const universeEpsSurprises = universeMetrics.map(m => m.epsSurprise)
+    const universeRevSurprises = universeMetrics.map(m => m.revSurprise)
+    const universeNtmEpsChanges = universeMetrics.map(m => m.ntmEpsChange)
+    const universeNtmRevChanges = universeMetrics.map(m => m.ntmRevChange)
+    const universeRoicTTMs = universeMetrics.map(m => m.roicTTM)
+    const universeGrossProfitabilities = universeMetrics.map(m => m.grossProfitability)
+    const universeAccruals = universeMetrics.map(m => m.accruals)
+    const universeFcfToAssets = universeMetrics.map(m => m.fcfToAssets)
+    const universeRoic3Yrs = universeMetrics.map(m => m.roic3Yr)
+    const universeEbitdaMargins = universeMetrics.map(m => m.ebitdaMargin)
+    
+    // 7b. Calculate QUALITY scores using universe-wide percentile ranking
+    console.log('Step 7b: Calculating QUALITY percentile scores across universe...')
+    const qualityPercentileScores = holdingsWithMetrics.map(holding => ({
+      roicTTMScore: calculatePercentileRank(holding.metrics.roicTTM, universeRoicTTMs, false),
+      grossProfitabilityScore: calculatePercentileRank(holding.metrics.grossProfitability, universeGrossProfitabilities, false),
+      accrualsScore: calculatePercentileRank(holding.metrics.accruals, universeAccruals, true), // Lower is better
+      fcfToAssetsScore: calculatePercentileRank(holding.metrics.fcfToAssets, universeFcfToAssets, false),
+      roic3YrScore: calculatePercentileRank(holding.metrics.roic3Yr, universeRoic3Yrs, false),
+      ebitdaMarginScore: calculatePercentileRank(holding.metrics.ebitdaMargin, universeEbitdaMargins, false)
+    }))
+    
+    // 7c. Calculate percentile scores for stock-specific metrics (using universe)
+    console.log('Step 7c: Calculating stock-specific percentile scores across universe...')
+    const stockSpecificScores = holdingsWithMetrics.map(holding => ({
+      targetPriceUpsideScore: calculatePercentileRank(holding.metrics.targetPriceUpside, universeTargetPrices, false),
+      epsSurpriseScore: calculatePercentileRank(holding.metrics.epsSurprise, universeEpsSurprises, false),
+      revSurpriseScore: calculatePercentileRank(holding.metrics.revSurprise, universeRevSurprises, false),
+      ntmEpsChangeScore: calculatePercentileRank(holding.metrics.ntmEpsChange, universeNtmEpsChanges, false),
+      ntmRevChangeScore: calculatePercentileRank(holding.metrics.ntmRevChange, universeNtmRevChanges, false)
+    }))
     
     // 8. Calculate benchmark-relative scores for VALUE, MOMENTUM, RISK
     console.log(`Step 8: Calculating benchmark-relative scores using ${benchmarkColumn}...`)
@@ -326,31 +400,35 @@ export async function GET(request: Request) {
         })
       }
       
+      const stockSpecific = stockSpecificScores[index]
+      
       const scored = {
         ...holding.metrics,
-        // VALUE, MOMENTUM, RISK from benchmark-relative (ensure no undefined values)
+        // VALUE from benchmark-relative (except Target Price which is percentile)
         peRatioScore: benchmarkRelativeScores.peRatioScore ?? null,
         evEbitdaScore: benchmarkRelativeScores.evEbitdaScore ?? null,
         evSalesScore: benchmarkRelativeScores.evSalesScore ?? null,
-        targetPriceUpsideScore: benchmarkRelativeScores.targetPriceUpsideScore ?? null,
+        targetPriceUpsideScore: stockSpecific.targetPriceUpsideScore, // Percentile (ETFs don't have targets)
+        // MOMENTUM from benchmark-relative (except EPS/Rev which are percentile)
         return12MEx1MScore: benchmarkRelativeScores.return12MEx1MScore ?? null,
         return3MScore: benchmarkRelativeScores.return3MScore ?? null,
         pct52WeekHighScore: benchmarkRelativeScores.pct52WeekHighScore ?? null,
-        epsSurpriseScore: benchmarkRelativeScores.epsSurpriseScore ?? null,
-        revSurpriseScore: benchmarkRelativeScores.revSurpriseScore ?? null,
-        ntmEpsChangeScore: benchmarkRelativeScores.ntmEpsChangeScore ?? null,
-        ntmRevChangeScore: benchmarkRelativeScores.ntmRevChangeScore ?? null,
-        beta3YrScore: benchmarkRelativeScores.beta3YrScore ?? null,
-        volatility30DayScore: benchmarkRelativeScores.volatility30DayScore ?? null,
-        maxDrawdownScore: benchmarkRelativeScores.maxDrawdownScore ?? null,
-        financialLeverageScore: null,
+        epsSurpriseScore: stockSpecific.epsSurpriseScore, // Percentile (ETFs don't have earnings)
+        revSurpriseScore: stockSpecific.revSurpriseScore, // Percentile (ETFs don't have revenue)
+        ntmEpsChangeScore: stockSpecific.ntmEpsChangeScore, // Percentile (ETFs don't have earnings)
+        ntmRevChangeScore: stockSpecific.ntmRevChangeScore, // Percentile (ETFs don't have revenue)
         // QUALITY from percentile ranking
         roicTTMScore: qualityScores.roicTTMScore,
         grossProfitabilityScore: qualityScores.grossProfitabilityScore,
         accrualsScore: qualityScores.accrualsScore,
         fcfToAssetsScore: qualityScores.fcfToAssetsScore,
         roic3YrScore: qualityScores.roic3YrScore,
-        ebitdaMarginScore: qualityScores.ebitdaMarginScore
+        ebitdaMarginScore: qualityScores.ebitdaMarginScore,
+        // RISK from benchmark-relative
+        beta3YrScore: benchmarkRelativeScores.beta3YrScore ?? null,
+        volatility30DayScore: benchmarkRelativeScores.volatility30DayScore ?? null,
+        maxDrawdownScore: benchmarkRelativeScores.maxDrawdownScore ?? null,
+        financialLeverageScore: null
       }
       
       const composites = calculateCompositeScores(scored, weights)
