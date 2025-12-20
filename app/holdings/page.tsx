@@ -207,81 +207,83 @@ export default function HoldingsPage() {
       )
       console.log(`Factset data: Loaded ${factsetMap.size} records`)
       
-      // Fetch target prices from API route (uses service role key to bypass RLS)
-      console.log('=== FETCHING TARGET PRICES ===')
-      let tgtPricesData: any[] = []
+      // Fetch target prices and current prices from FactSet API (uses service role to bypass RLS)
+      console.log('=== FETCHING TARGET PRICES AND PRICES FROM FACTSET ===')
+      let tgtPricesMap = new Map<string, number | null>()
+      let factsetPricesMap = new Map<string, number | null>()
       try {
-        const tgtPricesResponse = await fetch('/api/target-prices')
-        if (tgtPricesResponse.ok) {
-          const tgtPricesResult = await tgtPricesResponse.json()
-          if (tgtPricesResult.success) {
-            tgtPricesData = tgtPricesResult.data
-            console.log(`Target Prices API: Fetched ${tgtPricesData.length} records`)
+        const factsetPricesResponse = await fetch('/api/factset-prices')
+        if (factsetPricesResponse.ok) {
+          const factsetPricesResult = await factsetPricesResponse.json()
+          if (factsetPricesResult.success && factsetPricesResult.data) {
+            console.log(`FactSet: Fetched ${factsetPricesResult.data.length} records`)
+            factsetPricesResult.data.forEach((row: { ticker: string; targetPrice: number | null; currentPrice: number | null }) => {
+              const ticker = row.ticker?.trim().toUpperCase()
+              if (ticker) {
+                tgtPricesMap.set(ticker, row.targetPrice)
+                factsetPricesMap.set(ticker, row.currentPrice)
+              }
+            })
+            console.log(`Target prices map: ${tgtPricesMap.size} tickers mapped`)
+            console.log(`FactSet prices map: ${factsetPricesMap.size} tickers mapped`)
+          } else {
+            console.warn('FactSet prices API returned no data')
           }
         } else {
-          console.warn('Failed to fetch target prices:', tgtPricesResponse.statusText)
+          console.warn('Failed to fetch FactSet prices:', factsetPricesResponse.statusText)
         }
       } catch (error) {
-        console.error('Error fetching target prices:', error)
+        console.error('Error fetching prices from FactSet API:', error)
       }
+      console.log('=== END FACTSET PRICES ===')
       
-      // Debug: Log first record to see actual column names
-      if (tgtPricesData && tgtPricesData.length > 0) {
-        console.log('First tgt_prices record:', tgtPricesData[0])
-        console.log('Column names in tgt_prices:', Object.keys(tgtPricesData[0]))
-      }
-      
-      // Create lookup map for target prices
-      const tgtPricesMap = new Map<string, number | null>()
-      if (tgtPricesData && tgtPricesData.length > 0) {
-        console.log(`Target prices: Processing ${tgtPricesData.length} records`)
-        tgtPricesData.forEach((t, idx) => {
-          // Get ticker - try all possible column name variations
-          let ticker = t['Ticker'] || t['ticker'] || t['TICKER']
-          // Get price - try all possible column name variations
-          const priceStr = t['Consensus Tgt Price'] || t['consensus_tgt_price'] || t['Consensus_Tgt_Price']
-          
-          // Debug first 5 records
-          if (idx < 5) {
-            console.log(`Record ${idx}: ticker="${ticker}", priceStr="${priceStr}"`)
+      // Fetch net weight data from portfolio API
+      console.log('=== FETCHING NET WEIGHTS ===')
+      let netWeightMap = new Map<string, number>()
+      try {
+        const netWeightResponse = await fetch('/api/portfolio')
+        if (netWeightResponse.ok) {
+          const netWeightResult = await netWeightResponse.json()
+          if (netWeightResult.success && netWeightResult.data?.rows) {
+            netWeightMap = new Map(
+              netWeightResult.data.rows.map((row: any) => [
+                row.ticker.toUpperCase(), 
+                row.net_weight
+              ])
+            )
+            console.log(`Net weights: Loaded ${netWeightMap.size} tickers`)
           }
-          
-          if (ticker) {
-            // Normalize ticker: remove asterisk prefix, trim whitespace, uppercase
-            ticker = ticker.replace(/^\*/, '').trim().toUpperCase()
-            
-            // Parse price, handling #N/A and other non-numeric values
-            let price: number | null = null
-            if (priceStr && priceStr !== '#N/A' && priceStr !== 'N/A' && priceStr !== '') {
-              const parsed = parseFloat(String(priceStr).replace(/[^0-9.-]/g, ''))
-              if (!isNaN(parsed)) {
-                price = parsed
-              }
-            }
-            
-            tgtPricesMap.set(ticker, price)
-          }
-        })
-        console.log(`Target prices map: ${tgtPricesMap.size} tickers mapped`)
-        // Log some sample entries
-        const sampleTickers = ['AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META']
-        sampleTickers.forEach(t => {
-          const upperT = t.toUpperCase()
-          console.log(`tgtPricesMap.get("${upperT}"):`, tgtPricesMap.get(upperT))
-        })
-        // Check if AAPL exists with any variation
-        console.log('Checking for AAPL variations:')
-        for (const [key, value] of tgtPricesMap.entries()) {
-          if (key.includes('AAPL') || key.includes('aapl') || key.includes('Aapl')) {
-            console.log(`Found AAPL variant: "${key}" = ${value}`)
-          }
+        } else {
+          console.warn('Failed to fetch net weights:', netWeightResponse.statusText)
         }
-        // Log all tickers in the map (first 30)
-        console.log('All tickers in tgt_prices map (first 30):', Array.from(tgtPricesMap.keys()).slice(0, 30))
-      } else {
-        console.log('Target prices: No data returned from query')
+      } catch (error) {
+        console.error('Error fetching net weights:', error)
       }
-      console.log('=== END TARGET PRICES ===')
+      console.log('=== END NET WEIGHTS ===')
+      
+      // Fetch scoring data from scoring API
+      console.log('=== FETCHING SCORES ===')
+      let scoresMap = new Map<string, number>()
+      try {
+        const scoringResponse = await fetch('/api/scoring?profile=BASE&benchmark=BENCHMARK1')
+        if (scoringResponse.ok) {
+          const scoringResult = await scoringResponse.json()
+          if (scoringResult.success && scoringResult.data) {
+            scoresMap = new Map(
+              scoringResult.data.map((stock: any) => [
+                stock.ticker.toUpperCase(),
+                stock.totalScore
+              ])
+            )
+            console.log(`Scores: Loaded ${scoresMap.size} tickers`)
+          }
+        } else {
+          console.warn('Failed to fetch scores:', scoringResponse.statusText)
+        }
+      } catch (error) {
+        console.error('Error fetching scores:', error)
+      }
+      console.log('=== END SCORES ===')
       
       // Also log holdings tickers for comparison
       const holdingsTickers = deduplicatedHoldings.map(h => h.stock_ticker.toUpperCase())
@@ -374,8 +376,10 @@ export default function HoldingsPage() {
         const basisPointContribution = calculatedWeight * calculatedPctChange / 100
         
         // Calculate Upside: (target_price / current_price - 1) * 100
-        const currentPriceForUpside = realtimePrice || h.current_price || h.close_price
-        const upside = (targetPrice && currentPriceForUpside > 0) 
+        // Use FactSet price as additional fallback
+        const factsetPrice = factsetPricesMap.get(normalizedHoldingTicker)
+        const currentPriceForUpside = realtimePrice || h.current_price || h.close_price || factsetPrice
+        const upside = (targetPrice && currentPriceForUpside && currentPriceForUpside > 0) 
           ? ((targetPrice / currentPriceForUpside) - 1) * 100 
           : null
         
@@ -397,9 +401,11 @@ export default function HoldingsPage() {
           earnings_time: factset?.earnings_time || h.earnings_time,
           // Target price from tgt_prices
           target_price: targetPrice || null,
-          // Placeholder fields
-          net_weight: null, // TBD
-          score: null, // TBD
+          // Net weight from portfolio calculations
+          net_weight: netWeightMap.get(h.stock_ticker.toUpperCase()) ?? null,
+          // Score from scoring calculations
+          score: scoresMap.get(h.stock_ticker.toUpperCase()) ?? null,
+          // Placeholder field
           target_weight: null, // TBD
           // Calculated fields
           calculated_weight: calculatedWeight,
@@ -955,9 +961,13 @@ export default function HoldingsPage() {
                   <td className="px-3 py-2 text-right text-sm font-medium text-white">
                     {holding.calculated_weight.toFixed(1)}%
                   </td>
-                  {/* 4. Net Weight (placeholder) */}
-                  <td className="px-3 py-2 text-right text-sm text-slate-500">
-                    -
+                  {/* 4. Net Weight */}
+                  <td className={`px-3 py-2 text-right text-sm font-medium ${
+                    holding.net_weight != null 
+                      ? holding.net_weight > 0 ? 'text-green-400' : holding.net_weight < 0 ? 'text-red-400' : 'text-slate-300'
+                      : 'text-slate-500'
+                  }`}>
+                    {holding.net_weight != null ? `${holding.net_weight.toFixed(2)}%` : '-'}
                   </td>
                   {/* 5. Target Weight (placeholder) */}
                   <td className="px-3 py-2 text-right text-sm text-slate-500">
@@ -991,9 +1001,13 @@ export default function HoldingsPage() {
                   <td className={`px-3 py-2 text-right text-sm font-medium ${holding.upside && holding.upside > 0 ? 'text-green-400' : holding.upside && holding.upside < 0 ? 'text-red-400' : 'text-slate-500'}`}>
                     {holding.upside !== null && holding.upside !== undefined ? `${holding.upside >= 0 ? '+' : ''}${holding.upside.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 11. Score (placeholder) */}
-                  <td className="px-3 py-2 text-right text-sm text-slate-500">
-                    -
+                  {/* 11. Score */}
+                  <td className={`px-3 py-2 text-right text-sm font-medium ${
+                    holding.score != null
+                      ? holding.score >= 60 ? 'text-green-400' : holding.score >= 40 ? 'text-yellow-400' : 'text-orange-400'
+                      : 'text-slate-500'
+                  }`}>
+                    {holding.score != null ? holding.score.toFixed(1) : '-'}
                   </td>
                   {/* 12. QQQ Ratio */}
                   <td className={`px-3 py-2 text-right text-sm ${holding.index_ratio ? 'text-slate-300' : 'text-slate-500'}`}>
