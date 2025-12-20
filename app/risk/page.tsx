@@ -468,9 +468,9 @@ export default function RiskPage() {
                 No market data available
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 z-10">
                     <tr className="bg-slate-700 border-b border-slate-600">
                       <th className="text-left py-3 px-4 font-semibold text-white">
                         Index
@@ -554,9 +554,9 @@ export default function RiskPage() {
             No security data available
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-slate-700 border-b border-slate-600">
                   <th className="text-left py-3 px-4 font-semibold text-white">
                     Ticker

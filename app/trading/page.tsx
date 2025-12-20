@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface HoldingData {
   stock_ticker: string
@@ -47,6 +47,7 @@ export default function TradingPage() {
   const [holdings, setHoldings] = useState<HoldingData[]>([])
   const [betaData, setBetaData] = useState<BetaData[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
+  const priceDebounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary>({
     currentCashPct: 0,
     currentTrueBeta: 0,
@@ -67,6 +68,13 @@ export default function TradingPage() {
   useEffect(() => {
     calculatePortfolioSummary()
   }, [holdings, betaData, trades, nav])
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(priceDebounceTimers.current).forEach(timer => clearTimeout(timer))
+    }
+  }, [])
 
   const fetchInitialData = async () => {
     try {
@@ -263,8 +271,8 @@ export default function TradingPage() {
     setTrades(trades.filter(t => t.id !== id))
   }
 
-  const updateTrade = async (id: string, field: keyof Trade, value: any) => {
-    const updatedTrades = await Promise.all(trades.map(async (trade) => {
+  const updateTrade = (id: string, field: keyof Trade, value: any) => {
+    const updatedTrades = trades.map((trade) => {
       if (trade.id !== id) return trade
 
       const updated = { ...trade, [field]: value }
@@ -274,20 +282,37 @@ export default function TradingPage() {
         const holding = holdings.find(h => h.stock_ticker === value)
         updated.currentWeight = holding ? holding.weight_pct : 0
         
-        // Fetch real-time price via API
+        // Clear existing debounce timer for this trade
+        if (priceDebounceTimers.current[id]) {
+          clearTimeout(priceDebounceTimers.current[id])
+        }
+        
+        // Debounce the price fetch - only fetch after user stops typing for 500ms
         if (value && value.trim() !== '') {
-          try {
-            const response = await fetch(`/api/stock-price?ticker=${value}`)
-            const result = await response.json()
-            if (result.success && result.data) {
-              updated.price = result.data.price || 0
-            } else {
-              updated.price = 0
+          priceDebounceTimers.current[id] = setTimeout(async () => {
+            try {
+              const response = await fetch(`/api/stock-price?ticker=${value}`)
+              const result = await response.json()
+              if (result.success && result.data) {
+                // Update only the price for this specific trade
+                setTrades(currentTrades => 
+                  currentTrades.map(t => {
+                    if (t.id === id) {
+                      const updatedTrade = { ...t, price: result.data.price || 0 }
+                      // Recalculate shares with new price
+                      if (updatedTrade.price > 0) {
+                        updatedTrade.shares = Math.abs(updatedTrade.dollars / updatedTrade.price)
+                      }
+                      return updatedTrade
+                    }
+                    return t
+                  })
+                )
+              }
+            } catch (error) {
+              console.error('Error fetching price:', error)
             }
-          } catch (error) {
-            console.error('Error fetching price:', error)
-            updated.price = 0
-          }
+          }, 500) // Wait 500ms after last keystroke
         } else {
           updated.price = 0
         }
@@ -316,7 +341,7 @@ export default function TradingPage() {
       }
 
       return updated
-    }))
+    })
 
     setTrades(updatedTrades)
   }
@@ -448,9 +473,9 @@ export default function TradingPage() {
           </button>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-700 border-b border-slate-600">
+            <thead className="bg-slate-700 border-b border-slate-600 sticky top-0 z-10">
               <tr>
                 <th className="text-left py-3 px-4 font-semibold text-white">Ticker</th>
                 <th className="text-right py-3 px-4 font-semibold text-white">Current Weight</th>

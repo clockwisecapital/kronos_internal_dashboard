@@ -265,9 +265,9 @@ export default function ScoringPage() {
 
       {/* Scores Table */}
       <div className="bg-slate-800 rounded-lg shadow-xl border border-slate-700 overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
           <table className="min-w-full divide-y divide-slate-700">
-            <thead className="bg-slate-700 border-b border-slate-600">
+            <thead className="bg-slate-700 border-b border-slate-600 sticky top-0 z-10">
               <tr>
                 <th 
                   className="px-4 py-3 text-left text-xs font-semibold text-white uppercase tracking-wider cursor-pointer hover:text-blue-400"
@@ -509,9 +509,9 @@ export default function ScoringPage() {
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-slate-700">
+          <div className="overflow-x-auto max-h-[800px] overflow-y-auto rounded-lg border border-slate-700">
             <table className="min-w-full divide-y divide-slate-700">
-              <thead className="bg-slate-800">
+              <thead className="bg-slate-800 sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-slate-300 uppercase tracking-wider">
                     Ticker

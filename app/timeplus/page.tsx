@@ -277,9 +277,9 @@ export default function TimePlusPage() {
           </p>
         </div>
         
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
           <table className="w-full">
-            <thead className="bg-slate-900/50">
+            <thead className="bg-slate-900/50 sticky top-0 z-10">
               <tr>
                 <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Ticker</th>
                 <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Asset Class</th>

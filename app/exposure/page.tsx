@@ -182,9 +182,9 @@ export default function ExposurePage() {
 
         {/* Main Sector Exposure Table */}
         <div className="bg-slate-800 rounded-lg shadow-xl overflow-hidden mb-8">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
             <table className="w-full">
-              <thead className="bg-slate-700">
+              <thead className="bg-slate-700 sticky top-0 z-10">
                 <tr>
                   <th
                     className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider cursor-pointer hover:bg-slate-600"
@@ -345,9 +345,9 @@ export default function ExposurePage() {
         {/* Additional Index Weightings Section */}
         <div className="mt-8 bg-slate-800 rounded-lg shadow-xl p-6">
           <h2 className="text-xl font-bold mb-4 text-slate-300">Additional Index Weightings</h2>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
             <table className="w-full">
-              <thead className="bg-slate-700">
+              <thead className="bg-slate-700 sticky top-0 z-10">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider">
                     GICS

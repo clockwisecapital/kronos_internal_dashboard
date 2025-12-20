@@ -55,6 +55,62 @@ interface BenchmarkReturn {
   dailyReturn: number
 }
 
+// Helper function to determine row highlighting based on earnings date
+function getEarningsHighlight(earningsDate: string | undefined): string {
+  if (!earningsDate) return ''
+  
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  
+  let earningsDateObj: Date
+  
+  // Parse earnings date - handle Excel serial numbers
+  const dateStr = String(earningsDate)
+  if (/^\d+(\.\d+)?$/.test(dateStr)) {
+    const excelEpoch = new Date(1899, 11, 30)
+    const serialNumber = parseFloat(dateStr)
+    earningsDateObj = new Date(excelEpoch.getTime() + serialNumber * 86400000)
+  } else {
+    earningsDateObj = new Date(dateStr)
+  }
+  
+  earningsDateObj.setHours(0, 0, 0, 0)
+  
+  // Check if earnings are today
+  if (earningsDateObj.getTime() === today.getTime()) {
+    return 'bg-red-900/30 hover:bg-red-900/40'
+  }
+  
+  // Calculate next business day
+  const nextBusinessDay = new Date(today)
+  
+  // If today is Friday (5), next business day is Monday (+3 days)
+  if (today.getDay() === 5) {
+    nextBusinessDay.setDate(today.getDate() + 3)
+  } 
+  // If today is Saturday (6), next business day is Monday (+2 days)
+  else if (today.getDay() === 6) {
+    nextBusinessDay.setDate(today.getDate() + 2)
+  }
+  // If today is Sunday (0), next business day is Monday (+1 day)
+  else if (today.getDay() === 0) {
+    nextBusinessDay.setDate(today.getDate() + 1)
+  }
+  // Otherwise, next business day is tomorrow
+  else {
+    nextBusinessDay.setDate(today.getDate() + 1)
+  }
+  
+  nextBusinessDay.setHours(0, 0, 0, 0)
+  
+  // Check if earnings are next business day
+  if (earningsDateObj.getTime() === nextBusinessDay.getTime()) {
+    return 'bg-yellow-900/30 hover:bg-yellow-900/40'
+  }
+  
+  return ''
+}
+
 export default function HoldingsPage() {
   const [holdings, setHoldings] = useState<HoldingWithCalculations[]>([])
   const [loading, setLoading] = useState(true)
@@ -755,8 +811,8 @@ export default function HoldingsPage() {
       </div>
 
       {/* Holdings Table with Sticky Header */}
-      <div className="bg-slate-800 rounded-lg border border-slate-700 shadow-xl" style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
-        <div className="overflow-x-auto">
+      <div className="bg-slate-800 rounded-lg border border-slate-700 shadow-xl overflow-hidden">
+        <div className="overflow-x-auto overflow-y-auto max-h-[800px]">
           <table className="w-full">
             <thead className="bg-slate-700 border-b border-slate-600 sticky top-0 z-10">
               <tr>
@@ -948,7 +1004,12 @@ export default function HoldingsPage() {
             </thead>
             <tbody className="divide-y divide-slate-700">
               {sortedHoldings.map((holding) => (
-                <tr key={holding.stock_ticker} className="hover:bg-slate-700/50 transition-colors">
+                <tr 
+                  key={holding.stock_ticker} 
+                  className={`transition-colors ${
+                    getEarningsHighlight(holding.earnings_date) || 'hover:bg-slate-700/50'
+                  }`}
+                >
                   {/* 1. Ticker */}
                   <td className="px-3 py-2">
                     <span className="text-sm font-medium text-white">{holding.stock_ticker}</span>

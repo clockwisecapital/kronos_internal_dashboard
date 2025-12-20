@@ -317,22 +317,25 @@ export default function SectorsPage() {
         </div>
 
         {/* Table Content - All Metrics */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center p-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
             </div>
           ) : (
             <table className="w-full text-xs">
-              <thead className="bg-slate-700 border-b border-slate-600">
+              <colgroup>
+                <col className="w-32" />
+              </colgroup>
+              <thead className="sticky top-0 z-20 bg-slate-700 border-b border-slate-600">
                 <tr>
-                  <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-10">Index</th>
+                  <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-30">Index</th>
                   <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-l border-r border-slate-600">P/E NTM</th>
                   <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white border-r border-slate-600">EV/EBITDA NTM</th>
                   <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white">EV/REVS NTM</th>
                 </tr>
                 <tr className="bg-slate-700/50 border-b-2 border-slate-600">
-                  <th className="py-2 px-3"></th>
+                  <th className="py-2 px-3 sticky left-0 bg-slate-700/50 z-30"></th>
                   <th className="text-center py-2 px-2 text-slate-400 font-medium">Avg</th>
                   <th className="text-center py-2 px-2 text-slate-400 font-medium">3-yr Med</th>
                   <th className="text-center py-2 px-2 text-slate-400 font-medium">Min</th>
@@ -348,7 +351,7 @@ export default function SectorsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
-                {sortedSectorValuations.map((sector) => (
+                {sortedSectorValuations.map((sector, idx) => (
                   <tr key={sector.ticker} className="hover:bg-slate-700/50 transition-colors">
                     <td className="py-3 px-3 font-semibold text-white sticky left-0 bg-slate-800 z-10">
                       <div className="flex flex-col">
@@ -470,7 +473,7 @@ export default function SectorsPage() {
         </div>
 
         {/* Holdings Table - All Metrics */}
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
           {holdingsLoading ? (
             <div className="flex items-center justify-center p-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -481,9 +484,12 @@ export default function SectorsPage() {
             </div>
           ) : (
             <table className="w-full text-xs">
-              <thead className="bg-slate-700 border-b border-slate-600">
+              <colgroup>
+                <col className="w-24" />
+              </colgroup>
+              <thead className="sticky top-0 z-20 bg-slate-700 border-b border-slate-600">
                 <tr>
-                  <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-10">Ticker</th>
+                  <th className="text-left py-3 px-3 font-semibold text-white sticky left-0 bg-slate-700 z-30">Ticker</th>
                   <th className="text-left py-3 px-3 font-semibold text-white">Company Name</th>
                   <th className="text-right py-3 px-3 font-semibold text-white">Weight</th>
                   <th className="text-center py-3 px-3 font-semibold text-white border-r border-slate-600">Clockwise Holding</th>
@@ -492,7 +498,7 @@ export default function SectorsPage() {
                   <th colSpan={4} className="text-center py-3 px-2 font-semibold text-white">EV/REVS NTM</th>
                 </tr>
                 <tr className="bg-slate-700/50 border-b-2 border-slate-600">
-                  <th className="py-2 px-3"></th>
+                  <th className="py-2 px-3 sticky left-0 bg-slate-700/50 z-30"></th>
                   <th className="py-2 px-3"></th>
                   <th className="py-2 px-3"></th>
                   <th className="py-2 px-3 border-r border-slate-600"></th>

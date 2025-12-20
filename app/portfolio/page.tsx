@@ -245,10 +245,11 @@ export default function NetWeightCalculationsPage() {
       </div>
 
       {/* Net Weight Table */}
-      <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-x-auto">
-        <table className="min-w-full text-xs">
-          <thead className="bg-slate-900 border-b border-slate-700">
-            <tr>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 shadow-xl overflow-hidden">
+        <div className="overflow-x-auto max-h-[800px] overflow-y-auto">
+          <table className="min-w-full text-xs">
+            <thead className="bg-slate-900 border-b border-slate-700 sticky top-0 z-10">
+              <tr>
               <th className="sticky left-0 z-10 bg-slate-900 text-left py-3 px-3 font-semibold text-white border-r border-slate-700">Ticker</th>
               <th className="text-left py-3 px-3 font-semibold text-white">Name</th>
               <th className="text-right py-3 px-2 font-semibold text-white">Holding Wt%</th>
@@ -371,6 +372,7 @@ export default function NetWeightCalculationsPage() {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
 
     </div>

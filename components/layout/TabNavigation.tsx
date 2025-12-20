@@ -19,6 +19,7 @@ const tabs = [
   { name: 'TIME+', path: '/timeplus' },
   { name: 'Cycles', path: '/cycles' },
   { name: 'Scenarios', path: '/scenarios' },
+  { name: 'Snapshot', path: '/snapshot' },
 ]
 
 export default function TabNavigation() {
