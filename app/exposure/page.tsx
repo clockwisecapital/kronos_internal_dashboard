@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 
-// ===== INTERFACES =====
 
 interface ExposureRow {
   gics: string
@@ -44,7 +43,6 @@ interface ExposureData {
   total_market_value: number
 }
 
-// ===== MAIN COMPONENT =====
 
 export default function ExposurePage() {
   const [data, setData] = useState<ExposureData | null>(null)

@@ -34,7 +34,6 @@ export async function GET() {
     console.log('=== Performance API: Starting calculation ===')
     const supabase = await createClient()
 
-    // 1. Fetch holdings data
     const latestDate = await getLatestHoldingsDate(supabase)
     
     if (!latestDate) {
@@ -59,21 +58,18 @@ export async function GET() {
 
     console.log(`Loaded ${holdings.length} holdings`)
     
-    // 2. De-duplicate holdings
     const holdingsToUse = deduplicateByTicker(holdings)
     
     if (holdingsToUse.length !== holdings.length) {
       console.log(`De-duplicated: ${holdings.length} → ${holdingsToUse.length} holdings`)
     }
 
-    // 3. Separate tradeable securities from cash/equivalents
     const allTickers = holdingsToUse.map(h => h.stock_ticker)
     const validTickers = filterValidTickers(allTickers)
     const tradeableHoldings = holdingsToUse.filter(h => validTickers.includes(h.stock_ticker))
     
     console.log(`Found ${tradeableHoldings.length} tradeable securities (out of ${holdingsToUse.length} total)`)
 
-    // 4. Fetch current prices for tradeable holdings
     console.log('Fetching current prices...')
     const pricesMap = new Map<string, number>()
     
@@ -89,7 +85,6 @@ export async function GET() {
     
     console.log(`Fetched prices for ${pricesMap.size} tradeable securities`)
 
-    // 5. Calculate NAV using realtime prices (matches Portfolio tab logic)
     const holdingsWithCalcs = holdingsToUse.map(h => {
       const realtimePrice = pricesMap.get(h.stock_ticker)
       return {
@@ -104,7 +99,6 @@ export async function GET() {
     const totalNAV = holdingsWithCalcs.reduce((sum, h) => sum + h.calculated_market_value, 0)
     console.log(`Total NAV: $${totalNAV.toLocaleString()} (from ${holdingsWithCalcs.length} holdings)`)
 
-    // 6. Prepare tradeable securities for performance calculations
     const tradeableWithPricesAndWeights = tradeableHoldings.map(h => {
       const currentPrice = pricesMap.get(h.stock_ticker) || h.close_price || h.current_price
       const weight = (h.market_value / totalNAV) * 100
@@ -116,17 +110,14 @@ export async function GET() {
       }
     })
 
-    // 7. Calculate performance for tradeable securities (in batches to avoid API throttling)
     console.log(`Calculating performance metrics for ${tradeableWithPricesAndWeights.length} tradeable securities...`)
     const performanceData = await calculateAllHoldingsPerformance(
       tradeableWithPricesAndWeights,
       5 // Process 5 holdings at a time
     )
 
-    // 8. Sort by weight (largest positions first)
     performanceData.sort((a, b) => b.weight - a.weight)
 
-    // 9. Calculate benchmark performance (SPY and QQQ)
     console.log('Calculating benchmark performance (SPY, QQQ)...')
     const benchmarkTickers = ['SPY', 'QQQ']
     const benchmarksWithPrices = []

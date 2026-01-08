@@ -422,3 +422,6 @@ export default function TickerViewPage() {
   )
 }
 
+
+
+

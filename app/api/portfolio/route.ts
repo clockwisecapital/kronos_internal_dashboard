@@ -74,7 +74,6 @@ export async function GET(request: Request) {
   try {
     const supabase = await createClient()
 
-    // 1. Fetch holdings data (get most recent upload only)
     const latestDate = await getLatestHoldingsDate(supabase)
     
     if (!latestDate) {
@@ -113,7 +112,6 @@ export async function GET(request: Request) {
       console.log(`De-duplicated: ${holdings.length} → ${holdingsToUse.length} holdings`)
     }
 
-    // 2. Calculate total market value and weights for holdings
     const totalMarketValue = holdingsToUse.reduce((sum, h) => sum + h.market_value, 0)
     
     const holdingsWithWeights: HoldingWithWeight[] = holdingsToUse.map(h => ({
@@ -123,7 +121,6 @@ export async function GET(request: Request) {
       weight: (h.market_value / totalMarketValue) * 100
     }))
 
-    // 3. Calculate index-based short totals (sum of all inverse ETF positions by index)
     const indexShortTotals: IndexShortTotals = calculateIndexShortTotals(holdingsWithWeights)
     
     console.log('Index Short Totals:', indexShortTotals)
@@ -133,7 +130,6 @@ export async function GET(request: Request) {
     console.log(`  SOXX shorts: ${indexShortTotals.soxx.toFixed(2)}%`)
     console.log(`  ARKK shorts: ${indexShortTotals.arkk.toFixed(2)}%`)
 
-    // 4. Fetch weightings data from database (includes all index columns)
     const { data: weightingsData, error: weightingsError } = await supabase
       .from('weightings')
       .select('*')
@@ -145,7 +141,6 @@ export async function GET(request: Request) {
 
     console.log(`Fetched ${weightingsData?.length || 0} weightings from database`)
 
-    // 5. Create a map of ticker -> weighting data (all index columns)
     const weightingsMap = new Map<string, WeightingData>()
     if (weightingsData) {
       weightingsData.forEach((w: any) => {
@@ -153,7 +148,6 @@ export async function GET(request: Request) {
       })
     }
 
-    // 6. Calculate individual inverse ETF contributions and net weight for each holding
     const netWeightRows: NetWeightRow[] = holdingsWithWeights.map(holding => {
       const weightingData = weightingsMap.get(holding.ticker.toUpperCase())
       const stockWeights: StockWeights = {

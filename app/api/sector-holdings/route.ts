@@ -48,7 +48,6 @@ export async function GET(request: Request) {
     console.log(`Fetching top 50 holdings for sector ${sector} (column: ${columnName})...`)
     const supabase = createServiceRoleClient()
 
-    // 1. Fetch all stocks with weight in this sector from the universe, sorted by weight descending
     // Note: weightings_universe has capitalized column names
     // Filter out null, empty string, and "-" (dash placeholder for no weight)
     const { data: weightingsData, error: weightingsError } = await supabase
@@ -67,7 +66,6 @@ export async function GET(request: Request) {
 
     console.log(`Fetched ${weightingsData?.length || 0} holdings for ${sector}`)
 
-    // 2. Get the latest holdings date to check which are Clockwise holdings
     const { data: dateData } = await supabase
       .from('holdings')
       .select('date')
@@ -79,7 +77,6 @@ export async function GET(request: Request) {
     if (dateData && dateData.length > 0) {
       const latestDate = dateData[0].date
       
-      // 3. Fetch all Clockwise holdings tickers
       const { data: holdingsData } = await supabase
         .from('holdings')
         .select('stock_ticker')
@@ -90,7 +87,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4. Format the data with Clockwise holding indicator
     const formattedHoldings = (weightingsData || []).map((item: any) => {
       // Parse weight as number (stored as text in DB)
       const weightValue = parseFloat(item[columnName]) || 0

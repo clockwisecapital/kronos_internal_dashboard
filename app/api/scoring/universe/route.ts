@@ -38,8 +38,7 @@ export async function GET(request: Request) {
     
     const supabase = createServiceRoleClient()
     
-    // 1. Get total count of universe tickers
-    console.log('Step 1: Getting total universe count...')
+    console.log('Getting total universe count...')
     const { count: totalCount } = await supabase
       .from('factset_data_v2')
       .select('*', { count: 'exact', head: true })
@@ -47,8 +46,7 @@ export async function GET(request: Request) {
     const totalPages = Math.ceil((totalCount || 0) / pageSize)
     console.log(`Total universe tickers: ${totalCount}, Total pages: ${totalPages}`)
     
-    // 2. Fetch ALL universe tickers for percentile calculation (lightweight columns)
-    console.log('Step 2: Fetching all universe data for percentile calculations...')
+    console.log('Fetching all universe data for percentile calculations...')
     const { data: universeData, error: universeError } = await supabase
       .from('factset_data_v2')
       .select(`
@@ -97,7 +95,6 @@ export async function GET(request: Request) {
     const universeRoic3Yrs = universeMetrics.map(m => m.roic3Yr)
     const universeEbitdaMargins = universeMetrics.map(m => m.ebitdaMargin)
     
-    // 3. Fetch paginated tickers with full data
     console.log(`Step 3: Fetching page ${page} tickers...`)
     const offset = (page - 1) * pageSize
     const { data: pageData, error: pageError } = await supabase
@@ -139,8 +136,7 @@ export async function GET(request: Request) {
     
     const pageTickers = pageData?.map(row => row.Ticker) || []
     
-    // 4. Fetch GICS benchmark data for page tickers
-    console.log('Step 4: Fetching GICS benchmark data for page tickers...')
+    console.log('Fetching GICS benchmark data for page tickers...')
     const { data: gicsBenchmarkData } = await supabase
       .from('gics_yahoo_finance')
       .select('"Ticker", "BENCHMARK1", "BENCHMARK2", "BENCHMARK3", "BENCHMARK_CUSTOM"')
@@ -153,8 +149,7 @@ export async function GET(request: Request) {
     
     console.log(`Loaded GICS benchmark data for ${gicsBenchmarkMap.size} tickers`)
     
-    // 5. Get unique benchmark tickers and fetch their data
-    console.log('Step 5: Fetching benchmark ETF data...')
+    console.log('Fetching benchmark ETF data...')
     const uniqueBenchmarks = new Set<string>()
     gicsBenchmarkData?.forEach((g: GicsBenchmarkData) => {
       if (g.BENCHMARK1) uniqueBenchmarks.add(g.BENCHMARK1)
@@ -188,8 +183,7 @@ export async function GET(request: Request) {
     
     console.log(`Loaded benchmark FactSet data for ${benchmarkFactsetMap.size} ETFs`)
     
-    // 6. Fetch score weightings
-    console.log('Step 6: Fetching score weightings...')
+    console.log('Fetching score weightings...')
     const { data: scoreWeightingsData, error: scoreWeightingsError } = await supabase
       .from('score_weightings')
       .select('profile_name, category, metric_name, metric_weight, category_weight')
@@ -203,8 +197,7 @@ export async function GET(request: Request) {
     const { weights, categoryWeights } = parseScoreWeightings(scoreWeightingsData as ScoreWeights[], profile)
     console.log(`Loaded weightings for profile ${profile}`)
     
-    // 7. Fetch historical prices from Yahoo Finance for page tickers + benchmarks
-    console.log('Step 7: Fetching historical prices from Yahoo Finance...')
+    console.log('Fetching historical prices from Yahoo Finance...')
     const allTickersForYahoo = [...pageTickers, ...benchmarkTickers]
     const historicalPricesPromises = allTickersForYahoo.map(ticker =>
       fetchHistoricalPricesForScoring(ticker)
@@ -231,8 +224,7 @@ export async function GET(request: Request) {
     
     console.log(`Fetched historical prices for ${historicalPricesMap.size} tickers (page + benchmarks)`)
     
-    // 8. Extract individual metrics for page tickers
-    console.log('Step 8: Extracting individual metrics...')
+    console.log('Extracting individual metrics...')
     const tickersWithMetrics = pageData
       ?.filter(ticker => {
         const yahoo = historicalPricesMap.get(ticker.Ticker.toUpperCase())
@@ -250,8 +242,7 @@ export async function GET(request: Request) {
     
     console.log(`Extracted metrics for ${tickersWithMetrics.length} tickers`)
     
-    // 9. Calculate QUALITY scores using universe-wide percentiles
-    console.log('Step 9: Calculating QUALITY percentile scores...')
+    console.log('Calculating QUALITY percentile scores...')
     const qualityPercentileScores = tickersWithMetrics.map(ticker => ({
       roicTTMScore: calculatePercentileRank(ticker.metrics.roicTTM, universeRoicTTMs, false),
       grossProfitabilityScore: calculatePercentileRank(ticker.metrics.grossProfitability, universeGrossProfitabilities, false),
@@ -261,8 +252,7 @@ export async function GET(request: Request) {
       ebitdaMarginScore: calculatePercentileRank(ticker.metrics.ebitdaMargin, universeEbitdaMargins, false)
     }))
     
-    // 10. Calculate stock-specific percentile scores
-    console.log('Step 10: Calculating stock-specific percentile scores...')
+    console.log('Calculating stock-specific percentile scores...')
     const stockSpecificScores = tickersWithMetrics.map(ticker => ({
       targetPriceUpsideScore: calculatePercentileRank(ticker.metrics.targetPriceUpside, universeTargetPrices, false),
       epsSurpriseScore: calculatePercentileRank(ticker.metrics.epsSurprise, universeEpsSurprises, false),
@@ -271,8 +261,7 @@ export async function GET(request: Request) {
       ntmRevChangeScore: calculatePercentileRank(ticker.metrics.ntmRevChange, universeNtmRevChanges, false)
     }))
     
-    // 11. Calculate benchmark-relative scores and combine
-    console.log(`Step 11: Calculating benchmark-relative scores using ${benchmarkColumn}...`)
+    console.log(`Calculating benchmark-relative scores using ${benchmarkColumn}...`)
     const finalScores: StockScore[] = tickersWithMetrics.map((ticker, index) => {
       const gicsBenchmark = ticker.gicsBenchmark
       
@@ -349,8 +338,7 @@ export async function GET(request: Request) {
       }
     })
     
-    // 12. Enrich with benchmark data
-    console.log('Step 12: Enriching with benchmark data...')
+    console.log('Enriching with benchmark data...')
     const enrichedScores = finalScores.map(score => {
       const gicsBenchmark = gicsBenchmarkMap.get(score.ticker.toUpperCase())
       

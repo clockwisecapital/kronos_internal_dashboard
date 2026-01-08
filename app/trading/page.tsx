@@ -209,19 +209,16 @@ export default function TradingPage() {
     // Target Betas: SUMPRODUCT approach - build target weights for ALL holdings
     const targetWeights = new Map<string, number>()
 
-    // 1. Start with current holdings weights
     holdings.forEach(h => {
       targetWeights.set(h.stock_ticker, h.weight_pct)
     })
 
-    // 2. Apply trades to update target weights
     trades.forEach(trade => {
       if (trade.ticker && trade.targetWeight !== undefined) {
         targetWeights.set(trade.ticker, trade.targetWeight)
       }
     })
 
-    // 3. Calculate target betas using SUMPRODUCT
     let targetTrueBeta = 0
     let target1YrBeta = 0
     let target3YrBeta = 0

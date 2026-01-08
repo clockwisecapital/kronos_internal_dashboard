@@ -48,7 +48,6 @@ export async function GET(request: Request) {
     
     const supabase = createServiceRoleClient()
     
-    // 1. Fetch latest holdings
     console.log('Step 1: Fetching holdings...')
     const { data: holdingsDateData } = await supabase
       .from('holdings')
@@ -87,7 +86,6 @@ export async function GET(request: Request) {
     
     console.log(`Loaded ${holdingsArray.length} unique holdings`)
     
-    // 2. Fetch FactSet data for all scoring metrics
     console.log('Step 2: Fetching FactSet data...')
     const { data: factsetData, error: factsetError } = await supabase
       .from('factset_data_v2')
@@ -129,7 +127,6 @@ export async function GET(request: Request) {
     
     console.log(`Loaded FactSet data for ${factsetMap.size} tickers`)
     
-    // 3. Fetch benchmark weightings (kept for backwards compatibility)
     console.log('Step 3: Fetching benchmark weightings...')
     const { data: weightingsData } = await supabase
       .from('weightings')
@@ -199,7 +196,6 @@ export async function GET(request: Request) {
     
     console.log(`Loaded benchmark FactSet data for ${benchmarkFactsetMap.size} ETFs`)
     
-    // 4. Fetch score weightings configuration
     console.log('Step 4: Fetching score weightings...')
     const { data: scoreWeightingsData, error: scoreWeightingsError } = await supabase
       .from('score_weightings')
@@ -219,7 +215,6 @@ export async function GET(request: Request) {
     console.log('Category weights:', Object.fromEntries(categoryWeights))
     console.log('QUALITY metric weights:', Object.fromEntries(weights.get('QUALITY')?.metricWeights || []))
     
-    // 5. Fetch historical prices from Yahoo Finance (holdings + benchmarks)
     console.log('Step 5: Fetching historical prices from Yahoo Finance...')
     const allTickersForYahoo = [...tickers, ...benchmarkTickers]
     const historicalPricesPromises = allTickersForYahoo.map(ticker =>
@@ -247,7 +242,6 @@ export async function GET(request: Request) {
     
     console.log(`Fetched historical prices for ${historicalPricesMap.size} tickers (holdings + benchmarks)`)
     
-    // 6. Extract individual metrics for all holdings and benchmarks
     console.log('Step 6: Extracting individual metrics...')
     const holdingsWithMetrics = holdingsArray
       .map(holding => {
@@ -277,7 +271,6 @@ export async function GET(request: Request) {
     
     console.log(`Extracted metrics for ${holdingsWithMetrics.length} holdings`)
     
-    // 7. Fetch ALL universe tickers for percentile calculation
     console.log('Step 7: Fetching universe data for percentile calculations...')
     const { data: universeData, error: universeError } = await supabase
       .from('factset_data_v2')
@@ -348,7 +341,6 @@ export async function GET(request: Request) {
       ntmRevChangeScore: calculatePercentileRank(holding.metrics.ntmRevChange, universeNtmRevChanges, false)
     }))
     
-    // 8. Calculate benchmark-relative scores for VALUE, MOMENTUM, RISK
     console.log(`Step 8: Calculating benchmark-relative scores using ${benchmarkColumn}...`)
     const finalScores: StockScore[] = holdingsWithMetrics.map((holding, index) => {
       const gicsBenchmark = holding.gicsBenchmark
@@ -458,7 +450,6 @@ export async function GET(request: Request) {
       }
     })
     
-    // 9. Enrich with holding and benchmark data
     console.log('Step 9: Enriching with holding and benchmark data...')
     const enrichedScores = finalScores.map(score => {
       const holding = uniqueHoldings.get(score.ticker)

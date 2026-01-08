@@ -35,7 +35,6 @@ export async function capturePortfolioSnapshot(): Promise<SnapshotResult> {
     const today = new Date().toISOString().split('T')[0]
     console.log(`Capturing snapshot for: ${today}`)
 
-    // 1. Check if snapshot already exists for today
     const { data: existing } = await supabase
       .from('portfolio_snapshot')
       .select('*')
@@ -48,7 +47,6 @@ export async function capturePortfolioSnapshot(): Promise<SnapshotResult> {
       console.log('⚠️ Snapshot already exists for today - will update with latest prices')
     }
 
-    // 2. Get latest holdings data
     const latestDate = await getLatestHoldingsDate(supabase)
     
     if (!latestDate) {
@@ -66,17 +64,14 @@ export async function capturePortfolioSnapshot(): Promise<SnapshotResult> {
 
     console.log(`Loaded ${holdings.length} holdings from date: ${latestDate}`)
 
-    // 3. De-duplicate holdings
     const holdingsToUse = deduplicateByTicker(holdings)
 
-    // 4. Separate tradeable securities from cash/equivalents
     const allTickers = holdingsToUse.map(h => h.stock_ticker)
     const validTickers = filterValidTickers(allTickers)
     const tradeableHoldings = holdingsToUse.filter(h => validTickers.includes(h.stock_ticker))
 
     console.log(`Processing ${tradeableHoldings.length} tradeable securities`)
 
-    // 5. Fetch current prices for tradeable holdings
     const pricesMap = new Map<string, number>()
     
     for (const holding of tradeableHoldings) {
@@ -96,7 +91,6 @@ export async function capturePortfolioSnapshot(): Promise<SnapshotResult> {
 
     console.log(`Fetched prices for ${pricesMap.size} securities`)
 
-    // 6. Calculate NAV using realtime prices (same logic as Portfolio tab)
     const holdingsWithCalcs = holdingsToUse.map(h => {
       const realtimePrice = pricesMap.get(h.stock_ticker)
       return {
@@ -107,7 +101,6 @@ export async function capturePortfolioSnapshot(): Promise<SnapshotResult> {
       }
     })
 
-    // 7. Calculate totals
     const nav = holdingsWithCalcs.reduce((sum, h) => sum + h.calculated_market_value, 0)
     
     // Calculate cash vs equity breakdown
@@ -126,7 +119,6 @@ export async function capturePortfolioSnapshot(): Promise<SnapshotResult> {
 
     console.log(`NAV: $${nav.toLocaleString()} (Cash: $${totalCash.toLocaleString()}, Equity: $${totalEquity.toLocaleString()})`)
 
-    // 8. Insert or update snapshot (UPSERT based on snapshot_date)
     const { data: snapshot, error: upsertError } = await supabase
       .from('portfolio_snapshot')
       .upsert({

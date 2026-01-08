@@ -15,7 +15,6 @@ import {
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
-// ===== INTERFACES =====
 
 interface HoldingData {
   stock_ticker: string
@@ -105,7 +104,6 @@ interface ExposureResponse {
   timestamp: string
 }
 
-// ===== CONSTANTS =====
 
 // Hardcoded GICS sectors and their associated index symbols
 const GICS_SECTORS = [
@@ -122,7 +120,6 @@ const GICS_SECTORS = [
   { sector: 'Utilities', index: 'xlu' }
 ]
 
-// ===== HELPER FUNCTIONS =====
 
 // Detect cash positions (money market funds, etc.)
 function isCashPosition(ticker: string): boolean {
@@ -149,7 +146,6 @@ function calculateIndexExposure(
   return { inIndex: indexWeight, notInIndex: holdingWeight - indexWeight }
 }
 
-// ===== MAIN API HANDLER =====
 
 export async function GET(request: Request) {
   try {
@@ -157,7 +153,6 @@ export async function GET(request: Request) {
     
     console.log('=== Exposure API: Starting calculations ===')
 
-    // 1. Fetch latest holdings
     const latestDate = await getLatestHoldingsDate(supabase)
     if (!latestDate) {
       return NextResponse.json({
@@ -190,7 +185,6 @@ export async function GET(request: Request) {
       weight: (h.market_value / totalMarketValue) * 100
     }))
 
-    // 2. Fetch net weights from portfolio API calculations
     const { data: netWeightResponse, error: netWeightError } = await supabase
       .from('holdings')
       .select('stock_ticker')
@@ -204,7 +198,6 @@ export async function GET(request: Request) {
 
     console.log('Index Short Totals:', indexShortTotals)
 
-    // 3. Fetch ALL weightings data
     const { data: weightingsData, error: weightingsError } = await supabase
       .from('weightings')
       .select('*')
@@ -220,7 +213,6 @@ export async function GET(request: Request) {
 
     console.log(`Loaded ${weightingsMap.size} weightings`)
 
-    // 4. Fetch ALL GICS data to create a ticker-to-sector map
     const { data: allGicsData, error: gicsError } = await supabase
       .from('gics_yahoo_finance')
       .select('"Ticker", "GICS Sector", "Risk on/off Score", "Core / Non-Core"')
@@ -258,7 +250,6 @@ export async function GET(request: Request) {
       }
     })
 
-    // 5. Calculate net weights for each holding
     const netWeightMap = new Map<string, number>()
     holdingsData.forEach(holding => {
       const weightingData = weightingsMap.get(holding.stock_ticker.toUpperCase())
@@ -280,7 +271,6 @@ export async function GET(request: Request) {
       netWeightMap.set(holding.stock_ticker.toUpperCase(), netWeight)
     })
 
-    // 6. Calculate exposure by GICS Sector (using hardcoded sectors)
     const sectorExposureData: Array<{
       sector: string
       index: string
@@ -344,8 +334,6 @@ export async function GET(request: Request) {
       }
     }
 
-    // 7. Calculate index weightings for ALL tickers in each GICS Sector
-    // Also calculate in-index vs non-index exposure
     const exposureRows: ExposureRow[] = []
 
     for (const sectorData of sectorExposureData) {
@@ -401,7 +389,6 @@ export async function GET(request: Request) {
     // Sort by current weight descending
     exposureRows.sort((a, b) => b.current_weight - a.current_weight)
 
-    // 8. Add special rows: Hedge, Other, Cash, Total
     const totalCurrentWeight = exposureRows.reduce((sum, row) => sum + row.current_weight, 0)
     const totalNetWeight = exposureRows.reduce((sum, row) => sum + row.net_weight, 0)
     const totalInIndex = exposureRows.reduce((sum, row) => sum + row.in_index, 0)
@@ -457,7 +444,6 @@ export async function GET(request: Request) {
       not_in_index: totalNotInIndex
     })
 
-    // 9. Calculate Portfolio Composition (Core/Non-Core)
     let coreWeight = 0
     let nonCoreWeight = 0
 
@@ -479,7 +465,6 @@ export async function GET(request: Request) {
       non_core: nonCoreWeight
     }
 
-    // 10. Calculate Portfolio Bias (Risk On/Off)
     let riskOnWeight = 0
     let riskOffWeight = 0
 
@@ -501,7 +486,6 @@ export async function GET(request: Request) {
       risk_off: riskOffWeight
     }
 
-    // 11. Calculate Portfolio Exposure (Long/Short/Net)
     const longWeight = holdingsData
       .filter(h => !isCashPosition(h.stock_ticker))
       .reduce((sum, h) => sum + h.weight, 0)

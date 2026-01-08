@@ -80,7 +80,6 @@ export async function GET() {
     console.log('=== Security Downside API: Calculating MA distances ===')
     const supabase = await createClient()
 
-    // 1. Get latest holdings date
     const { data: dateData, error: dateError } = await supabase
       .from('holdings')
       .select('date')
@@ -93,7 +92,6 @@ export async function GET() {
 
     const latestDate = dateData[0].date
 
-    // 2. Fetch holdings from latest date
     const { data: holdings, error: holdingsError } = await supabase
       .from('holdings')
       .select('stock_ticker, market_value')
@@ -104,7 +102,6 @@ export async function GET() {
       throw new Error('Failed to fetch holdings')
     }
 
-    // 3. Deduplicate by ticker
     const uniqueHoldingsMap = new Map()
     holdings.forEach(h => {
       if (!uniqueHoldingsMap.has(h.stock_ticker)) {
@@ -112,10 +109,8 @@ export async function GET() {
       }
     })
 
-    // 4. Calculate total portfolio value and weights
     const totalValue = Array.from(uniqueHoldingsMap.values()).reduce((sum, val) => sum + val, 0)
     
-    // 5. Filter out cash positions and calculate MA distances for securities
     const results: SecurityDownsideRow[] = []
     
     for (const [ticker, marketValue] of uniqueHoldingsMap.entries()) {
@@ -170,7 +165,6 @@ export async function GET() {
       })
     }
 
-    // 6. Sort by weight (descending)
     results.sort((a, b) => b.weight - a.weight)
 
     console.log(`Calculated MA distances for ${results.length} securities`)

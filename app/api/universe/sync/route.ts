@@ -15,7 +15,6 @@ export async function POST() {
     console.log('=== Universe Sync: Starting ===')
     const supabase = await createClient()
 
-    // 1. Get all unique tickers from holdings
     const { data: holdings, error: holdingsError } = await supabase
       .from('holdings')
       .select('stock_ticker, security_name')
@@ -34,7 +33,6 @@ export async function POST() {
 
     console.log(`Found ${holdings.length} holdings`)
 
-    // 2. Get existing universe tickers
     const { data: existingUniverse, error: universeError } = await supabase
       .from('universe')
       .select('ticker')
@@ -46,14 +44,12 @@ export async function POST() {
     const existingTickers = new Set(existingUniverse?.map(u => u.ticker) || [])
     console.log(`Found ${existingTickers.size} existing universe entries`)
 
-    // 3. Deduplicate holdings by ticker
     const uniqueHoldings = Array.from(
       new Map(holdings.map(h => [h.stock_ticker, h])).values()
     )
 
     console.log(`${uniqueHoldings.length} unique tickers in holdings`)
 
-    // 4. Find tickers that need to be added to universe
     const newTickers = uniqueHoldings.filter(h => !existingTickers.has(h.stock_ticker))
 
     if (newTickers.length === 0) {
@@ -67,7 +63,6 @@ export async function POST() {
 
     console.log(`Adding ${newTickers.length} new tickers to universe`)
 
-    // 5. Create universe entries for new tickers
     const newUniverseEntries = newTickers.map(h => ({
       ticker: h.stock_ticker,
       name: h.security_name || h.stock_ticker,
@@ -103,7 +98,6 @@ export async function POST() {
       upside_upside_pct: null
     }))
 
-    // 6. Insert new entries
     const { data: inserted, error: insertError } = await supabase
       .from('universe')
       .insert(newUniverseEntries)

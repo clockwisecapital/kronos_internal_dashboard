@@ -5,9 +5,7 @@
  * various financial metrics using percentile ranking within holdings.
  */
 
-// ============================================================================
 // Types & Interfaces
-// ============================================================================
 
 export interface FactSetData {
   Ticker: string
@@ -125,9 +123,7 @@ export interface StockScore extends ScoredMetrics, CompositeScores, TotalScore {
   ticker: string
 }
 
-// ============================================================================
 // Utility Functions
-// ============================================================================
 
 /**
  * Safely parse a string to a number, returning null if invalid
@@ -252,9 +248,7 @@ export function calculateBenchmarkRelativeScore(
   return Math.max(0, Math.min(100, Math.round(score * 10) / 10))
 }
 
-// ============================================================================
 // Metric Extraction Functions
-// ============================================================================
 
 /**
  * Extract all individual metrics from FactSet and Yahoo data
@@ -354,9 +348,7 @@ export function extractIndividualMetrics(
   }
 }
 
-// ============================================================================
 // Scoring Functions
-// ============================================================================
 
 /**
  * Calculate percentile scores for all metrics across all holdings

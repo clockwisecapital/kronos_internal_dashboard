@@ -23,7 +23,6 @@ export async function GET(request: Request) {
     const supabase = createServiceRoleClient()
     const serverSupabase = await createClient()
 
-    // 1. Get latest holdings date
     const { data: dateData } = await supabase
       .from('holdings')
       .select('date')
@@ -32,7 +31,6 @@ export async function GET(request: Request) {
 
     const latestDate = dateData && dateData.length > 0 ? dateData[0].date : null
 
-    // 2. Fetch Holdings data (Weight, Shares, Market Value)
     let holdingData = null
     if (latestDate) {
       const { data: holding } = await supabase
@@ -45,7 +43,6 @@ export async function GET(request: Request) {
       holdingData = holding
     }
 
-    // 3. Fetch Net Weight data from portfolio API
     let netWeightData = null
     try {
       const portResponse = await fetch(`${request.url.split('/api/')[0]}/api/portfolio`, {
@@ -61,14 +58,12 @@ export async function GET(request: Request) {
       console.warn('Could not fetch net weight data:', error)
     }
 
-    // 4. Fetch Universe data (Target Weight, Sector info)
     const { data: universeData } = await supabase
       .from('universe')
       .select('*')
       .eq('ticker', ticker)
       .single()
 
-    // 5. Fetch Current Price from Yahoo Finance
     let priceData = null
     try {
       priceData = await fetchQuote(ticker)
@@ -76,28 +71,24 @@ export async function GET(request: Request) {
       console.warn(`Could not fetch price for ${ticker}:`, error)
     }
 
-    // 6. Fetch Target Price
     const { data: targetPriceData } = await supabase
       .from('tgt_prices')
       .select('*')
       .eq('ticker', ticker)
       .single()
 
-    // 7. Fetch ETF Weights (All indexes)
     const { data: weightingsData } = await supabase
       .from('weightings_universe')
       .select('*')
       .eq('Ticker', ticker)
       .single()
 
-    // 8. Fetch FactSet data (Betas, Earnings, Valuations)
     const { data: factsetData } = await supabase
       .from('factset_data_v2')
       .select('*')
       .eq('Ticker', ticker)
       .single()
 
-    // 9. Fetch Performance data
     let performanceData = null
     try {
       const perfResponse = await fetch(`${request.url.split('/api/')[0]}/api/performance`, {
@@ -113,7 +104,6 @@ export async function GET(request: Request) {
       console.warn('Could not fetch performance data:', error)
     }
 
-    // 10. Calculate additional metrics
     const currentPrice = priceData?.currentPrice || holdingData?.close_price || null
     const previousClose = priceData?.previousClose || holdingData?.close_price || null
     const priceChange = currentPrice && previousClose ? 
@@ -125,7 +115,6 @@ export async function GET(request: Request) {
     const upside = currentPrice && targetPrice ?
       ((targetPrice - currentPrice) / currentPrice) * 100 : null
 
-    // 11. Prepare index membership data
     const indexWeights: Record<string, number> = {}
     if (weightingsData) {
       const etfColumns = ['SPY', 'QQQ', 'DIA', 'XLK', 'XLF', 'XLC', 'XLY', 'XLP', 
@@ -139,7 +128,6 @@ export async function GET(request: Request) {
       })
     }
 
-    // 12. Format response
     const response = {
       ticker,
       name: weightingsData?.Name || factsetData?.['Company Name'] || holdingData?.security_name || ticker,
@@ -201,4 +189,7 @@ export async function GET(request: Request) {
     )
   }
 }
+
+
+
 
