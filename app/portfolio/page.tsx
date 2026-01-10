@@ -163,9 +163,23 @@ export default function NetWeightCalculationsPage() {
     return 'text-slate-300'
   }
 
-  // Calculate total effective hedge (sum of all index shorts)
+  // Find SBIT holding if it exists
+  const sbitHolding = rows.find(row => row.ticker.toUpperCase() === 'SBIT')
+  const sbitWeight = sbitHolding?.holding_weight || 0
+  const sbitEffectiveShort = sbitWeight * 2 // 2x leverage
+  
+  // Debug logging for SBIT
+  console.log('=== SBIT DEBUG ===')
+  console.log('SBIT holding found:', sbitHolding)
+  console.log('SBIT weight:', sbitWeight)
+  console.log('SBIT effective short (2x):', sbitEffectiveShort)
+  console.log('Total rows:', rows.length)
+  console.log('All tickers:', rows.map(r => r.ticker).join(', '))
+  console.log('==================')
+  
+  // Calculate total effective hedge (sum of all index shorts + SBIT)
   const totalEffectiveHedge = indexShortTotals.qqq + indexShortTotals.spy + 
-    indexShortTotals.dow + indexShortTotals.soxx + indexShortTotals.arkk
+    indexShortTotals.dow + indexShortTotals.soxx + indexShortTotals.arkk + sbitEffectiveShort
 
   return (
     <div className="p-6 space-y-6">
@@ -200,7 +214,7 @@ export default function NetWeightCalculationsPage() {
       </div>
 
       {/* Summary Cards - Portfolio Value + Index Short Totals */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         {/* Portfolio Value */}
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
           <p className="text-xs font-medium text-slate-400 mb-1">Portfolio Value</p>
@@ -211,6 +225,12 @@ export default function NetWeightCalculationsPage() {
         <div className="bg-slate-800 rounded-xl border border-orange-500/30 p-4 shadow-xl">
           <p className="text-xs font-medium text-slate-400 mb-1">Total Hedge</p>
           <p className="text-xl font-bold text-orange-400">{totalEffectiveHedge.toFixed(2)}%</p>
+        </div>
+        
+        {/* SBIT Shorts - 2x Inverse */}
+        <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 shadow-xl">
+          <p className="text-xs font-medium text-slate-400 mb-1">SBIT Shorts</p>
+          <p className="text-xl font-bold text-orange-400">{sbitEffectiveShort.toFixed(2)}%</p>
         </div>
         
         {/* QQQ Shorts */}

@@ -8,6 +8,8 @@ interface HoldingPerformance {
   return_1d: number
   return_5d: number
   return_30d: number
+  return_90d: number
+  return_1yr: number
   return_qtd: number
   return_ytd: number
 }
@@ -129,6 +131,12 @@ export default function PerformancePage() {
                     30-Day Return
                   </th>
                   <th className="text-right py-3 px-6 font-semibold text-white">
+                    90-Day Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    1-Year Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
                     QTD Return
                   </th>
                   <th className="text-right py-3 px-6 font-semibold text-white">
@@ -153,6 +161,12 @@ export default function PerformancePage() {
                     </td>
                     <td className={`text-right py-4 px-6 font-medium ${benchmark.return_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {benchmark.return_30d > 0 ? '+' : ''}{benchmark.return_30d.toFixed(2)}%
+                    </td>
+                    <td className={`text-right py-4 px-6 font-medium ${benchmark.return_90d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {benchmark.return_90d > 0 ? '+' : ''}{benchmark.return_90d.toFixed(2)}%
+                    </td>
+                    <td className={`text-right py-4 px-6 font-medium ${benchmark.return_1yr >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {benchmark.return_1yr > 0 ? '+' : ''}{benchmark.return_1yr.toFixed(2)}%
                     </td>
                     <td className={`text-right py-4 px-6 font-medium ${benchmark.return_qtd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {benchmark.return_qtd > 0 ? '+' : ''}{benchmark.return_qtd.toFixed(2)}%
@@ -194,19 +208,25 @@ export default function PerformancePage() {
                 <th className="text-right py-3 px-6 font-semibold text-white">
                   5-Day Return
                 </th>
-                <th className="text-right py-3 px-6 font-semibold text-white">
-                  30-Day Return
-                </th>
-                <th className="text-right py-3 px-6 font-semibold text-white">
-                  QTD Return
-                </th>
-                <th className="text-right py-3 px-6 font-semibold text-white">
-                  YTD Return
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {performanceData.map((stock) => (
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    30-Day Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    90-Day Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    1-Year Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    QTD Return
+                  </th>
+                  <th className="text-right py-3 px-6 font-semibold text-white">
+                    YTD Return
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {performanceData.map((stock) => (
                 <tr
                   key={stock.ticker}
                   className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors"
@@ -225,6 +245,12 @@ export default function PerformancePage() {
                   </td>
                   <td className={`text-right py-4 px-6 font-medium ${stock.return_30d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return_30d > 0 ? '+' : ''}{stock.return_30d.toFixed(1)}%
+                  </td>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_90d >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.return_90d > 0 ? '+' : ''}{stock.return_90d.toFixed(1)}%
+                  </td>
+                  <td className={`text-right py-4 px-6 font-medium ${stock.return_1yr >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.return_1yr > 0 ? '+' : ''}{stock.return_1yr.toFixed(1)}%
                   </td>
                   <td className={`text-right py-4 px-6 font-medium ${stock.return_qtd >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {stock.return_qtd > 0 ? '+' : ''}{stock.return_qtd.toFixed(1)}%

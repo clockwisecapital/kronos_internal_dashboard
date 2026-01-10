@@ -218,18 +218,39 @@ export default function HoldingsPage() {
       const deduplicatedHoldings = Array.from(uniqueHoldingsMap.values())
       console.log(`Holdings: De-duplicated ${holdingsData.length} → ${deduplicatedHoldings.length}`)
       
-      // Fetch weightings data
-      const { data: weightingsData, error: weightingsError } = await supabase
-        .from('weightings')
-        .select('ticker, spy, qqq')
-      
-      if (weightingsError) {
-        console.warn('Failed to fetch weightings:', weightingsError.message)
+      // Fetch weightings data via API (uses service role to bypass RLS)
+      let weightingsData: any[] = []
+      try {
+        const weightingsResponse = await fetch('/api/weightings')
+        if (weightingsResponse.ok) {
+          const weightingsResult = await weightingsResponse.json()
+          if (weightingsResult.success) {
+            weightingsData = weightingsResult.data
+          }
+        } else {
+          console.warn('Failed to fetch weightings:', weightingsResponse.statusText)
+        }
+      } catch (error) {
+        console.error('Error fetching weightings:', error)
       }
       
-      // Create lookup map for weightings
+      console.log(`Weightings data: Loaded ${weightingsData?.length || 0} records from weightings API`)
+      
+      // Create lookup map for weightings (convert to uppercase for consistent lookup)
+      // Parse text values: "-" or empty string = null, otherwise parse as float
       const weightingsMap = new Map(
-        weightingsData?.map(w => [w.ticker, { spy: w.spy, qqq: w.qqq }]) || []
+        weightingsData?.map((w: any) => {
+          const spyValue = w.SPY && w.SPY !== '-' && w.SPY !== '' ? parseFloat(w.SPY) : null
+          const qqqValue = w.QQQ && w.QQQ !== '-' && w.QQQ !== '' ? parseFloat(w.QQQ) : null
+          
+          return [
+            w.Ticker.toUpperCase(), 
+            { 
+              spy: spyValue, 
+              qqq: qqqValue 
+            }
+          ]
+        }) || []
       )
       
       // Fetch factset_data from API route (uses service role key to bypass RLS)
@@ -377,23 +398,129 @@ export default function HoldingsPage() {
         // Continue without real-time prices - will use close_price from CSV
       }
       
-      // Calculate derived fields per client requirements (use deduplicated data)
-      const totalMarketValue = deduplicatedHoldings.reduce((sum, h) => sum + h.market_value, 0)
-      
-      const holdingsWithCalcs: HoldingWithCalculations[] = deduplicatedHoldings.map(h => {
-        // Get real-time price and previous close from Yahoo Finance
+      // STEP 1: Calculate realtime market values for all holdings first
+      // This is needed before we can calculate weights based on realtime totals
+      const holdingsWithRealtimeValues = deduplicatedHoldings.map(h => {
         const priceData = pricesMap.get(h.stock_ticker)
         const realtimePrice = priceData?.current
+        const calculated_market_value = realtimePrice ? (realtimePrice * h.shares) : 
+                                        h.current_price ? (h.current_price * h.shares) : 
+                                        h.market_value
+        return {
+          ...h,
+          realtimePrice,
+          calculated_market_value
+        }
+      })
+      
+      // STEP 2: Calculate total portfolio value using REALTIME market values
+      const totalMarketValue = holdingsWithRealtimeValues.reduce((sum, h) => sum + h.calculated_market_value, 0)
+      
+      console.log(`Total Market Value: CSV-based=$${deduplicatedHoldings.reduce((sum, h) => sum + h.market_value, 0).toLocaleString()}, Realtime=$${totalMarketValue.toLocaleString()}`)
+      
+      // STEP 3: Calculate all derived fields using REALTIME values
+      const holdingsWithCalcs: HoldingWithCalculations[] = holdingsWithRealtimeValues.map(h => {
+        // Get real-time price and previous close from Yahoo Finance
+        const priceData = pricesMap.get(h.stock_ticker)
         const previousClose = priceData?.previousClose || h.close_price // Fallback to CSV close_price
-        const effectivePrice = realtimePrice || h.current_price || h.close_price
+        const effectivePrice = h.realtimePrice || h.current_price || h.close_price
         
-        // Get weightings for this ticker
-        const weights = weightingsMap.get(h.stock_ticker)
+        // Get weightings for this ticker (ensure uppercase lookup)
+        const weights = weightingsMap.get(h.stock_ticker.toUpperCase())
         const spyWeight = weights?.spy || null
         const qqqWeight = weights?.qqq || null
         
         // Get factset data for this ticker
         const factset = factsetMap.get(h.stock_ticker)
+        
+        // Apply beta fallback logic
+        const ticker = h.stock_ticker.toUpperCase()
+        const isCash = ticker.includes('CASH') || ticker === 'FGXXX' || ticker === 'SPAXX' || ticker === 'VMFXX'
+        
+        let beta_1y: number | null = null
+        let beta_3y: number | null = null
+        let beta_5y: number | null = null
+        
+        if (isCash) {
+          // Cash always has beta of 0
+          beta_1y = 0
+          beta_3y = 0
+          beta_5y = 0
+        } else {
+          // Get raw beta values from factset
+          const raw_beta_1y = factset?.beta_1y
+          const raw_beta_3y = factset?.beta_3y
+          const raw_beta_5y = factset?.beta_5y
+          
+          // Apply fallback logic:
+          // 1. If beta is null/blank, default to 1
+          // 2. If shorter period available but not longer, use shorter for longer
+          
+          // Start with defaults of 1 for non-cash
+          beta_1y = raw_beta_1y ?? 1
+          beta_3y = raw_beta_3y ?? 1
+          beta_5y = raw_beta_5y ?? 1
+          
+          // Apply shorter-to-longer fallback
+          // If we have 1yr but not 3yr, use 1yr for 3yr
+          if (raw_beta_1y != null && raw_beta_3y == null) {
+            beta_3y = raw_beta_1y
+          }
+          
+          // If we have 3yr but not 5yr, use 3yr for 5yr
+          if (raw_beta_3y != null && raw_beta_5y == null) {
+            beta_5y = raw_beta_3y
+          }
+          
+          // If we have 1yr but not 5yr (and no 3yr), use 1yr for 5yr
+          if (raw_beta_1y != null && raw_beta_5y == null && raw_beta_3y == null) {
+            beta_5y = raw_beta_1y
+          }
+        }
+        
+        // Calculate True Beta: max(beta_1y, beta_3y, beta_5y)
+        // If stock is in QQQ, also consider QQQ's betas and use the higher value
+        let true_beta: number | null = null
+        
+        if (!isCash) {
+          // Get max of stock's own betas
+          const stockMaxBeta = Math.max(beta_1y, beta_3y, beta_5y)
+          
+          // Check if stock is in QQQ (has QQQ weight)
+          const isInQQQ = qqqWeight != null && qqqWeight > 0
+          
+          if (isInQQQ) {
+            // Get QQQ's betas from factset
+            const qqqFactset = factsetMap.get('QQQ')
+            
+            // Apply same fallback logic to QQQ betas
+            let qqq_beta_1y = qqqFactset?.beta_1y ?? 1
+            let qqq_beta_3y = qqqFactset?.beta_3y ?? 1
+            let qqq_beta_5y = qqqFactset?.beta_5y ?? 1
+            
+            // QQQ shorter-to-longer fallback
+            if (qqqFactset?.beta_1y != null && qqqFactset?.beta_3y == null) {
+              qqq_beta_3y = qqqFactset.beta_1y
+            }
+            if (qqqFactset?.beta_3y != null && qqqFactset?.beta_5y == null) {
+              qqq_beta_5y = qqqFactset.beta_3y
+            }
+            if (qqqFactset?.beta_1y != null && qqqFactset?.beta_5y == null && qqqFactset?.beta_3y == null) {
+              qqq_beta_5y = qqqFactset.beta_1y
+            }
+            
+            const qqqMaxBeta = Math.max(qqq_beta_1y, qqq_beta_3y, qqq_beta_5y)
+            
+            // True beta is the higher of stock's max or QQQ's max
+            true_beta = Math.max(stockMaxBeta, qqqMaxBeta)
+          } else {
+            // Not in QQQ, just use stock's max beta
+            true_beta = stockMaxBeta
+          }
+        } else {
+          // Cash has true beta of 0
+          true_beta = 0
+        }
         
         // Get target price for this ticker
         // Normalize ticker: trim whitespace, uppercase
@@ -415,8 +542,8 @@ export default function HoldingsPage() {
             Array.from(tgtPricesMap.keys()).slice(0, 20))
         }
         
-        // Calculate portfolio weight percentage
-        const calculatedWeight = totalMarketValue > 0 ? (h.market_value / totalMarketValue) * 100 : 0
+        // Calculate portfolio weight percentage using REALTIME market values
+        const calculatedWeight = totalMarketValue > 0 ? (h.calculated_market_value / totalMarketValue) * 100 : 0
         
         // Calculate Index Ratio: Portfolio Weight / QQQ Weight (as decimal for display as %)
         const indexRatio = (qqqWeight !== null && qqqWeight > 0) 
@@ -424,7 +551,7 @@ export default function HoldingsPage() {
           : null
         
         // Calculate % Change
-        const calculatedPctChange = realtimePrice ? ((realtimePrice / previousClose - 1) * 100) :
+        const calculatedPctChange = h.realtimePrice ? ((h.realtimePrice / previousClose - 1) * 100) :
                                     h.current_price ? ((h.current_price / previousClose - 1) * 100) : 
                                     0
         
@@ -434,7 +561,7 @@ export default function HoldingsPage() {
         // Calculate Upside: (target_price / current_price - 1) * 100
         // Use FactSet price as additional fallback
         const factsetPrice = factsetPricesMap.get(normalizedHoldingTicker)
-        const currentPriceForUpside = realtimePrice || h.current_price || h.close_price || factsetPrice
+        const currentPriceForUpside = h.realtimePrice || h.current_price || h.close_price || factsetPrice
         const upside = (targetPrice && currentPriceForUpside && currentPriceForUpside > 0) 
           ? ((targetPrice / currentPriceForUpside) - 1) * 100 
           : null
@@ -442,16 +569,16 @@ export default function HoldingsPage() {
         return {
           ...h,
           // Store real-time price and previous close for display
-          current_price: realtimePrice || h.current_price,
+          current_price: h.realtimePrice || h.current_price,
           previous_close: previousClose,
           sp_weight: spyWeight,
           qqq_weight: qqqWeight,
           index_ratio: indexRatio,
-          // Beta values from factset_data_v2
-          beta_1y: factset?.beta_1y || null,
-          beta_3y: factset?.beta_3y || null,
-          beta_5y: factset?.beta_5y || null,
-          true_beta: null, // TBD - placeholder
+          // Beta values with fallback logic applied
+          beta_1y,
+          beta_3y,
+          beta_5y,
+          true_beta,
           // Earnings date and time from factset_data_v2
           earnings_date: factset?.earnings_date || h.earnings_date,
           earnings_time: factset?.earnings_time || h.earnings_time,
@@ -463,11 +590,9 @@ export default function HoldingsPage() {
           score: scoresMap.get(h.stock_ticker.toUpperCase()) ?? null,
           // Placeholder field
           target_weight: null, // TBD
-          // Calculated fields
+          // Calculated fields (using realtime values)
           calculated_weight: calculatedWeight,
-          calculated_market_value: realtimePrice ? (realtimePrice * h.shares) : 
-                                   h.current_price ? (h.current_price * h.shares) : 
-                                   h.market_value,
+          calculated_market_value: h.calculated_market_value, // Already calculated in step 1
           calculated_pct_change: calculatedPctChange,
           basis_point_contribution: basisPointContribution,
           upside: upside
@@ -760,7 +885,14 @@ export default function HoldingsPage() {
         <div className="bg-slate-800 rounded-lg border border-slate-700 p-3 shadow-lg">
           <p className="text-xs text-slate-400 mb-0.5">True Beta</p>
           <p className="text-lg font-bold text-blue-400">
-            -
+            {(() => {
+              const totalWeight = holdings.reduce((sum, h) => sum + h.calculated_weight, 0)
+              const weightedBeta = holdings.reduce((sum, h) => {
+                const beta = h.true_beta ?? 1 // Use true_beta with fallback to 1
+                return sum + (beta * h.calculated_weight / 100)
+              }, 0)
+              return totalWeight > 0 ? weightedBeta.toFixed(2) : '-'
+            })()}
           </p>
         </div>
 
@@ -771,7 +903,7 @@ export default function HoldingsPage() {
             {(() => {
               const totalWeight = holdings.reduce((sum, h) => sum + h.calculated_weight, 0)
               const weightedBeta = holdings.reduce((sum, h) => {
-                const beta = h.beta_5y || 0
+                const beta = h.beta_5y ?? 1 // Fallback to 1 if null
                 return sum + (beta * h.calculated_weight / 100)
               }, 0)
               return totalWeight > 0 ? weightedBeta.toFixed(2) : '-'
@@ -786,7 +918,7 @@ export default function HoldingsPage() {
             {(() => {
               const totalWeight = holdings.reduce((sum, h) => sum + h.calculated_weight, 0)
               const weightedBeta = holdings.reduce((sum, h) => {
-                const beta = h.beta_3y || 0
+                const beta = h.beta_3y ?? 1 // Fallback to 1 if null
                 return sum + (beta * h.calculated_weight / 100)
               }, 0)
               return totalWeight > 0 ? weightedBeta.toFixed(2) : '-'
@@ -801,7 +933,7 @@ export default function HoldingsPage() {
             {(() => {
               const totalWeight = holdings.reduce((sum, h) => sum + h.calculated_weight, 0)
               const weightedBeta = holdings.reduce((sum, h) => {
-                const beta = h.beta_1y || 0
+                const beta = h.beta_1y ?? 1 // Fallback to 1 if null
                 return sum + (beta * h.calculated_weight / 100)
               }, 0)
               return totalWeight > 0 ? weightedBeta.toFixed(2) : '-'
@@ -1082,9 +1214,9 @@ export default function HoldingsPage() {
                   <td className={`px-3 py-2 text-right text-sm ${holding.sp_weight ? 'text-slate-300' : 'text-slate-500'}`}>
                     {holding.sp_weight ? `${holding.sp_weight.toFixed(1)}%` : '-'}
                   </td>
-                  {/* 15. True Beta (placeholder) */}
-                  <td className="px-3 py-2 text-right text-sm text-slate-500">
-                    -
+                  {/* 15. True Beta */}
+                  <td className={`px-3 py-2 text-right text-sm ${holding.true_beta != null ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {holding.true_beta != null ? holding.true_beta.toFixed(2) : '-'}
                   </td>
                   {/* 16. Beta 1 */}
                   <td className={`px-3 py-2 text-right text-sm ${holding.beta_1y ? 'text-slate-300' : 'text-slate-500'}`}>

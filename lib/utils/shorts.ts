@@ -20,7 +20,7 @@
  */
 export const INVERSE_ETFS = {
   '3x': ['SPXU', 'SQQQ', 'SDOW', 'SOXS'],  // Triple leveraged inverse
-  '2x': ['QID', 'SDS', 'DXD'],              // Double leveraged inverse (added DXD for DOW)
+  '2x': ['QID', 'SDS', 'DXD', 'SBIT'],     // Double leveraged inverse (added DXD for DOW, SBIT for Bitcoin)
   '1x': ['SARK', 'PSQ', 'SH', 'DOG']        // Single leveraged inverse (added DOG for DOW)
 } as const
 

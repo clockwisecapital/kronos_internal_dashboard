@@ -190,12 +190,12 @@ export async function fetchPriceNDaysAgo(ticker: string, daysAgo: number): Promi
     const closes = historicalData.indicators.quote[0].close as number[]
     
     // Count backwards exactly N trading days from the most recent day
-    // Start from the last valid price (not today's intraday price)
+    // Start from the second-to-last element (skip today's close)
     let tradingDaysBack = 0
     let targetIndex = closes.length - 1
     
     // Find the index that's exactly N trading days ago
-    for (let i = closes.length - 1; i >= 0 && tradingDaysBack < daysAgo; i--) {
+    for (let i = closes.length - 2; i >= 0 && tradingDaysBack < daysAgo; i--) {
       if (closes[i] !== null && closes[i] !== undefined) {
         tradingDaysBack++
         targetIndex = i

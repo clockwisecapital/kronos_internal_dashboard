@@ -15,7 +15,9 @@ import {
   calculateInverseETFContributions,
   IndexShortTotals,
   ShortBreakdown,
-  StockWeights
+  StockWeights,
+  isInverseETF,
+  getLeverageMultiplier
 } from '@/lib/utils/shorts'
 
 export const dynamic = 'force-dynamic'
@@ -129,24 +131,40 @@ export async function GET(request: Request) {
     console.log(`  DOW shorts: ${indexShortTotals.dow.toFixed(2)}%`)
     console.log(`  SOXX shorts: ${indexShortTotals.soxx.toFixed(2)}%`)
     console.log(`  ARKK shorts: ${indexShortTotals.arkk.toFixed(2)}%`)
-
-    const { data: weightingsData, error: weightingsError } = await supabase
-      .from('weightings')
-      .select('*')
-      .order('ticker', { ascending: true })
-
-    if (weightingsError) {
-      console.warn('Failed to fetch weightings:', weightingsError.message)
+    
+    // Check for SBIT in holdings
+    const sbitHolding = holdingsWithWeights.find(h => h.ticker.toUpperCase() === 'SBIT')
+    console.log('=== SBIT API CHECK ===')
+    console.log('SBIT in holdings?', sbitHolding ? 'YES' : 'NO')
+    if (sbitHolding) {
+      console.log('SBIT details:', sbitHolding)
+      console.log('SBIT weight:', sbitHolding.weight.toFixed(4) + '%')
+      console.log('SBIT effective (2x):', (sbitHolding.weight * 2).toFixed(4) + '%')
     }
+    console.log('All tickers:', holdingsWithWeights.map(h => h.ticker).join(', '))
+    console.log('======================')
 
-    console.log(`Fetched ${weightingsData?.length || 0} weightings from database`)
+    // Fetch weightings from weightings_universe via API
+    console.log('Fetching weightings from weightings_universe...')
+    let weightingsData: any[] = []
+    try {
+      const weightingsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/weightings`)
+      const weightingsResult = await weightingsResponse.json()
+      
+      if (weightingsResult.success && weightingsResult.data) {
+        weightingsData = weightingsResult.data
+        console.log(`Fetched ${weightingsData.length} weightings from weightings_universe`)
+      } else {
+        console.warn('Failed to fetch weightings from API:', weightingsResult.message)
+      }
+    } catch (error) {
+      console.warn('Error fetching weightings:', error)
+    }
 
     const weightingsMap = new Map<string, WeightingData>()
-    if (weightingsData) {
-      weightingsData.forEach((w: any) => {
-        weightingsMap.set(w.ticker.toUpperCase(), w)
-      })
-    }
+    weightingsData.forEach((w: any) => {
+      weightingsMap.set(w.ticker.toUpperCase(), w)
+    })
 
     const netWeightRows: NetWeightRow[] = holdingsWithWeights.map(holding => {
       const weightingData = weightingsMap.get(holding.ticker.toUpperCase())
@@ -170,7 +188,15 @@ export async function GET(request: Request) {
       const short_sark = contributions.sark
       
       const effectiveShort = short_qqq + short_spy + short_dow + short_soxx + short_sark
-      const netWeight = holding.weight - effectiveShort
+      
+      // Calculate net weight: for inverse ETFs, use negative leverage; for stocks, subtract effective short
+      let netWeight: number
+      if (isInverseETF(holding.ticker)) {
+        const leverageMultiplier = getLeverageMultiplier(holding.ticker) || 1
+        netWeight = holding.weight * leverageMultiplier * -1
+      } else {
+        netWeight = holding.weight - effectiveShort
+      }
 
       return {
         ticker: holding.ticker,
