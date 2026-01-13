@@ -198,16 +198,25 @@ export async function GET(request: Request) {
 
     console.log('Index Short Totals:', indexShortTotals)
 
-    const { data: weightingsData, error: weightingsError } = await supabase
-      .from('weightings')
-      .select('*')
-
-    if (weightingsError) {
-      console.warn('Failed to fetch weightings:', weightingsError.message)
+    // Fetch weightings from weightings_universe via API
+    console.log('Fetching weightings from weightings_universe...')
+    let weightingsData: any[] = []
+    try {
+      const weightingsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/weightings`)
+      const weightingsResult = await weightingsResponse.json()
+      
+      if (weightingsResult.success && weightingsResult.data) {
+        weightingsData = weightingsResult.data
+        console.log(`Fetched ${weightingsData.length} weightings from weightings_universe`)
+      } else {
+        console.warn('Failed to fetch weightings from API:', weightingsResult.message)
+      }
+    } catch (error) {
+      console.warn('Error fetching weightings:', error)
     }
 
     const weightingsMap = new Map<string, WeightingData>()
-    weightingsData?.forEach((w: any) => {
+    weightingsData.forEach((w: any) => {
       weightingsMap.set(w.ticker.toUpperCase(), w)
     })
 

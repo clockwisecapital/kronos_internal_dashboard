@@ -238,13 +238,14 @@ export default function HoldingsPage() {
       
       // Create lookup map for weightings (convert to uppercase for consistent lookup)
       // Parse text values: "-" or empty string = null, otherwise parse as float
+      // Note: weightings API now returns normalized lowercase property names
       const weightingsMap = new Map(
         weightingsData?.map((w: any) => {
-          const spyValue = w.SPY && w.SPY !== '-' && w.SPY !== '' ? parseFloat(w.SPY) : null
-          const qqqValue = w.QQQ && w.QQQ !== '-' && w.QQQ !== '' ? parseFloat(w.QQQ) : null
+          const spyValue = w.spy !== null && w.spy !== undefined ? w.spy : null
+          const qqqValue = w.qqq !== null && w.qqq !== undefined ? w.qqq : null
           
           return [
-            w.Ticker.toUpperCase(), 
+            w.ticker.toUpperCase(), 
             { 
               spy: spyValue, 
               qqq: qqqValue 
