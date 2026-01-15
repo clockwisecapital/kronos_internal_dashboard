@@ -40,12 +40,12 @@ export async function calculateHoldingPerformance(
     console.log(`Calculating performance for ${ticker} (weight: ${weight.toFixed(2)}%)`)
     
     // Fetch historical prices in parallel for efficiency
-    const [price1DayAgo, price5DaysAgo, price30DaysAgo, price90DaysAgo, price365DaysAgo, priceEndOfLastQuarter, priceEndOfLastYear] = await Promise.all([
+    const [price1DayAgo, price5DaysAgo, price30DaysAgo, price90DaysAgo, price252DaysAgo, priceEndOfLastQuarter, priceEndOfLastYear] = await Promise.all([
       fetchPriceNDaysAgo(ticker, 1),
       fetchPriceNDaysAgo(ticker, 5),
       fetchPriceNDaysAgo(ticker, 30),
       fetchPriceNDaysAgo(ticker, 90),
-      fetchPriceNDaysAgo(ticker, 365),
+      fetchPriceNDaysAgo(ticker, 252),
       fetchPriceEndOfLastQuarter(ticker),
       fetchPriceEndOfLastYear(ticker)
     ])
@@ -55,7 +55,7 @@ export async function calculateHoldingPerformance(
     const return_5d = price5DaysAgo ? calculateReturn(currentPrice, price5DaysAgo) : 0
     const return_30d = price30DaysAgo ? calculateReturn(currentPrice, price30DaysAgo) : 0
     const return_90d = price90DaysAgo ? calculateReturn(currentPrice, price90DaysAgo) : 0
-    const return_1yr = price365DaysAgo ? calculateReturn(currentPrice, price365DaysAgo) : 0
+    const return_1yr = price252DaysAgo ? calculateReturn(currentPrice, price252DaysAgo) : 0
     const return_qtd = priceEndOfLastQuarter ? calculateReturn(currentPrice, priceEndOfLastQuarter) : 0
     const return_ytd = priceEndOfLastYear ? calculateReturn(currentPrice, priceEndOfLastYear) : 0
     

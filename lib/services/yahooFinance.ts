@@ -179,7 +179,7 @@ export async function fetchHistoricalData(
 export async function fetchPriceNDaysAgo(ticker: string, daysAgo: number): Promise<number | null> {
   try {
     // Fetch more days than needed to account for weekends/holidays
-    const range = daysAgo <= 7 ? '1mo' : '3mo'
+    const range = daysAgo <= 7 ? '1mo' : daysAgo <= 90 ? '3mo' : '2y'
     const historicalData = await fetchHistoricalData(ticker, range)
     
     if (!historicalData || !historicalData.timestamp || !historicalData.indicators?.quote?.[0]?.close) {

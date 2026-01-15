@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient } from '@/app/utils/supabase/server'
+import { createServiceRoleClient } from '@/app/utils/supabase/service-role'
 import {
   getLatestHoldingsDate,
   deduplicateByTicker,
@@ -144,27 +145,37 @@ export async function GET(request: Request) {
     console.log('All tickers:', holdingsWithWeights.map(h => h.ticker).join(', '))
     console.log('======================')
 
-    // Fetch weightings from weightings_universe via API
+    // Fetch weightings from weightings_universe table directly using service role client
     console.log('Fetching weightings from weightings_universe...')
-    let weightingsData: any[] = []
-    try {
-      const weightingsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/weightings`)
-      const weightingsResult = await weightingsResponse.json()
-      
-      if (weightingsResult.success && weightingsResult.data) {
-        weightingsData = weightingsResult.data
-        console.log(`Fetched ${weightingsData.length} weightings from weightings_universe`)
-      } else {
-        console.warn('Failed to fetch weightings from API:', weightingsResult.message)
-      }
-    } catch (error) {
-      console.warn('Error fetching weightings:', error)
+    const supabaseServiceRole = createServiceRoleClient()
+    const { data: weightingsData, error: weightingsError } = await supabaseServiceRole
+      .from('weightings_universe')
+      .select('"Ticker", "Name", "SPY", "QQQ", "SOXX", "SMH", "ARKK"')
+
+    if (weightingsError) {
+      console.error('Error fetching weightings:', weightingsError)
+      throw new Error(`Failed to fetch weightings: ${weightingsError.message}`)
     }
 
+    console.log(`Fetched ${weightingsData?.length || 0} weightings from weightings_universe`)
+
+    // Normalize and map weightings data
     const weightingsMap = new Map<string, WeightingData>()
-    weightingsData.forEach((w: any) => {
-      weightingsMap.set(w.ticker.toUpperCase(), w)
-    })
+    if (weightingsData) {
+      weightingsData.forEach((item: any) => {
+        const normalized: WeightingData = {
+          ticker: item.Ticker,
+          name: item.Name,
+          spy: item.SPY && item.SPY !== '-' ? parseFloat(item.SPY) : null,
+          qqq: item.QQQ && item.QQQ !== '-' ? parseFloat(item.QQQ) : null,
+          dow: null,  // DOW/DIA column not available in weightings_universe
+          soxx: item.SOXX && item.SOXX !== '-' ? parseFloat(item.SOXX) : null,
+          smh: item.SMH && item.SMH !== '-' ? parseFloat(item.SMH) : null,
+          arkk: item.ARKK && item.ARKK !== '-' ? parseFloat(item.ARKK) : null
+        }
+        weightingsMap.set(normalized.ticker.toUpperCase(), normalized)
+      })
+    }
 
     const netWeightRows: NetWeightRow[] = holdingsWithWeights.map(holding => {
       const weightingData = weightingsMap.get(holding.ticker.toUpperCase())
