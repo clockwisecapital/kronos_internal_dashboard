@@ -8,6 +8,7 @@ import {
   calculateTotalScore,
   parseScoreWeightings,
   calculateBenchmarkRelativeScores,
+  calculateBenchmarkConstituentScores,
   type FactSetData,
   type ScoreWeights,
   type StockScore,
@@ -36,6 +37,70 @@ interface GicsBenchmarkData {
   BENCHMARK2: string | null
   BENCHMARK3: string | null
   BENCHMARK_CUSTOM: string | null
+}
+
+/**
+ * Fetch benchmark constituents from weightings_universe table
+ * Returns tickers that have a non-null weight in the specified benchmark
+ */
+async function fetchBenchmarkConstituents(
+  supabase: any,
+  benchmarkTicker: string
+): Promise<string[]> {
+  // Normalize to uppercase for consistency
+  const normalizedTicker = benchmarkTicker.toUpperCase()
+  
+  // Map benchmark ticker to column name in weightings_universe
+  // The table has columns: Ticker, Name, SPY, QQQ, SOXX, SMH, ARKK, etc.
+  const columnMap: Record<string, string> = {
+    'SPY': 'SPY',
+    'QQQ': 'QQQ',
+    'SOXX': 'SOXX',
+    'SMH': 'SMH',
+    'ARKK': 'ARKK',
+    'XLK': 'XLK',
+    'XLF': 'XLF',
+    'XLC': 'XLC',
+    'XLY': 'XLY',
+    'XLP': 'XLP',
+    'XLE': 'XLE',
+    'XLV': 'XLV',
+    'XLI': 'XLI',
+    'XLB': 'XLB',
+    'XLRE': 'XLRE',
+    'XLU': 'XLU',
+    'IGV': 'IGV',
+    'ITA': 'ITA'
+  }
+  
+  const columnName = columnMap[normalizedTicker]
+  
+  if (!columnName) {
+    console.warn(`Benchmark ${normalizedTicker} not found in weightings_universe columns`)
+    return []
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from('weightings_universe')
+      .select(`"Ticker", "${columnName}"`)
+      .not(columnName, 'is', null)
+    
+    if (error) {
+      console.error(`Error fetching constituents for ${normalizedTicker}:`, error)
+      return []
+    }
+    
+    const constituents = (data || [])
+      .filter((row: any) => row[columnName] && row[columnName] !== '-')
+      .map((row: any) => row.Ticker)
+    
+    console.log(`Found ${constituents.length} constituents for ${normalizedTicker}`)
+    return constituents
+  } catch (error) {
+    console.error(`Exception fetching constituents for ${normalizedTicker}:`, error)
+    return []
+  }
 }
 
 export async function GET(request: Request) {
@@ -306,7 +371,9 @@ export async function GET(request: Request) {
         "acrcrurals %",
         "FCF",
         "Consensus Price Target",
-        "Total assets"
+        "Total assets",
+        "1 month volatility",
+        "3 yr beta"
       `)
     
     if (universeError) {
@@ -335,6 +402,17 @@ export async function GET(request: Request) {
     const universeRoic3Yrs = universeMetrics.map(m => m.roic3Yr)
     const universeEbitdaMargins = universeMetrics.map(m => m.ebitdaMargin)
     
+    // Also extract VALUE, MOMENTUM, RISK metrics for fallback
+    const universePeRatios = universeMetrics.map(m => m.peRatio)
+    const universeEvEbitdas = universeMetrics.map(m => m.evEbitda)
+    const universeEvSales = universeMetrics.map(m => m.evSales)
+    const universeReturn12MEx1Ms = universeMetrics.map(m => m.return12MEx1M)
+    const universeReturn3Ms = universeMetrics.map(m => m.return3M)
+    const universePct52WeekHighs = universeMetrics.map(m => m.pct52WeekHigh)
+    const universeBeta3Yrs = universeMetrics.map(m => m.beta3Yr)
+    const universeVolatility30Days = universeMetrics.map(m => m.volatility30Day)
+    const universeMaxDrawdowns = universeMetrics.map(m => m.maxDrawdown)
+    
     // 7b. Calculate QUALITY scores using universe-wide percentile ranking
     console.log('Step 7b: Calculating QUALITY percentile scores across universe...')
     const qualityPercentileScores = holdingsWithMetrics.map(holding => ({
@@ -356,7 +434,79 @@ export async function GET(request: Request) {
       ntmRevChangeScore: calculatePercentileRank(holding.metrics.ntmRevChange, universeNtmRevChanges, false)
     }))
     
-    console.log(`Step 8: Calculating benchmark-relative scores using ${benchmarkColumn}...`)
+    console.log(`Step 8: Calculating benchmark constituent-based scores using ${benchmarkColumn}...`)
+    
+    // Build a map of benchmark ticker -> constituent metrics
+    const benchmarkConstituentsCache = new Map<string, IndividualMetrics[]>()
+    
+    // Get unique benchmark tickers from holdings
+    const uniqueHoldingBenchmarks = new Set<string>()
+    holdingsWithMetrics.forEach(holding => {
+      const gicsBenchmark = holding.gicsBenchmark
+      if (gicsBenchmark) {
+        let benchmarkTicker: string | null = null
+        switch (benchmarkColumn) {
+          case 'BENCHMARK1':
+            benchmarkTicker = gicsBenchmark.BENCHMARK1
+            break
+          case 'BENCHMARK2':
+            benchmarkTicker = gicsBenchmark.BENCHMARK2
+            break
+          case 'BENCHMARK3':
+            benchmarkTicker = gicsBenchmark.BENCHMARK3
+            break
+          case 'BENCHMARK_CUSTOM':
+            benchmarkTicker = gicsBenchmark.BENCHMARK_CUSTOM
+            break
+        }
+        if (benchmarkTicker) {
+          uniqueHoldingBenchmarks.add(benchmarkTicker.toUpperCase())
+        }
+      }
+    })
+    
+    console.log(`Found ${uniqueHoldingBenchmarks.size} unique benchmarks in holdings:`, Array.from(uniqueHoldingBenchmarks))
+    
+    // Fetch constituents for each unique benchmark
+    for (const benchmarkTicker of uniqueHoldingBenchmarks) {
+      console.log(`\n📊 Fetching constituents for benchmark: ${benchmarkTicker}`)
+      const constituentTickers = await fetchBenchmarkConstituents(supabase, benchmarkTicker)
+      
+      if (constituentTickers.length >= 10) { // Minimum 10 constituents for meaningful ranking
+        console.log(`✅ ${benchmarkTicker} has ${constituentTickers.length} constituents - using constituent-based ranking`)
+        console.log(`   Sample constituents: ${constituentTickers.slice(0, 5).join(', ')}...`)
+        
+        // Fetch FactSet data for constituents
+        const { data: constituentFactsetData } = await supabase
+          .from('factset_data_v2')
+          .select(`
+            "Ticker",
+            "P/E NTM",
+            "EV/EBITDA - NTM",
+            "EV/Sales - NTM",
+            "PRICE",
+            "1 month volatility",
+            "3 yr beta",
+            "52 week high"
+          `)
+          .in('Ticker', constituentTickers)
+        
+        // Extract metrics for each constituent
+        const constituentMetrics: IndividualMetrics[] = []
+        constituentFactsetData?.forEach((factset: any) => {
+          const yahoo = historicalPricesMap.get(factset.Ticker.toUpperCase())
+          if (yahoo) {
+            constituentMetrics.push(extractIndividualMetrics(factset as FactSetData, yahoo))
+          }
+        })
+        
+        benchmarkConstituentsCache.set(benchmarkTicker, constituentMetrics)
+        console.log(`✅ Successfully loaded ${constituentMetrics.length} constituent metrics for ${benchmarkTicker}`)
+      } else {
+        console.warn(`⚠️  Benchmark ${benchmarkTicker} has only ${constituentTickers.length} constituents, falling back to universe percentile`)
+      }
+    }
+    
     const finalScores: StockScore[] = holdingsWithMetrics.map((holding, index) => {
       const gicsBenchmark = holding.gicsBenchmark
       
@@ -379,20 +529,51 @@ export async function GET(request: Request) {
         }
       }
       
-      let benchmarkRelativeScores: Partial<ReturnType<typeof calculateBenchmarkRelativeScores>> = {}
+      let benchmarkRelativeScores: Partial<ReturnType<typeof calculateBenchmarkConstituentScores>> = {}
       
       if (benchmarkTicker) {
-        const benchmarkFactset = benchmarkFactsetMap.get(benchmarkTicker.toUpperCase())
-        const benchmarkYahoo = historicalPricesMap.get(benchmarkTicker.toUpperCase())
+        const constituentMetrics = benchmarkConstituentsCache.get(benchmarkTicker.toUpperCase())
         
-        if (benchmarkFactset && benchmarkYahoo) {
-          const benchmarkMetrics = extractIndividualMetrics(benchmarkFactset, benchmarkYahoo)
-          benchmarkRelativeScores = calculateBenchmarkRelativeScores(holding.metrics, benchmarkMetrics)
+        if (constituentMetrics && constituentMetrics.length >= 10) {
+          // Use constituent-based percentile ranking
+          benchmarkRelativeScores = calculateBenchmarkConstituentScores(holding.metrics, constituentMetrics)
+          
+          // Log first holding for verification
+          if (index === 0) {
+            console.log(`\n🎯 SCORING METHOD VERIFICATION (First Holding: ${holding.ticker})`)
+            console.log(`   Benchmark: ${benchmarkTicker}`)
+            console.log(`   Method: CONSTITUENT-BASED PERCENTILE RANKING`)
+            console.log(`   Constituents used: ${constituentMetrics.length}`)
+            console.log(`   Sample scores:`)
+            console.log(`     - P/E Score: ${benchmarkRelativeScores.peRatioScore}`)
+            console.log(`     - 3M Return Score: ${benchmarkRelativeScores.return3MScore}`)
+            console.log(`     - Beta Score: ${benchmarkRelativeScores.beta3YrScore}`)
+          }
         } else {
-          console.warn(`Missing benchmark data for ${benchmarkTicker}`)
+          // Fall back to universe-wide percentile for VALUE, MOMENTUM, RISK
+          console.warn(`⚠️  No constituents found for ${benchmarkTicker}, using universe percentile for ${holding.ticker}`)
+          
+          benchmarkRelativeScores = {
+            peRatioScore: calculatePercentileRank(holding.metrics.peRatio, universePeRatios, true),
+            evEbitdaScore: calculatePercentileRank(holding.metrics.evEbitda, universeEvEbitdas, true),
+            evSalesScore: calculatePercentileRank(holding.metrics.evSales, universeEvSales, true),
+            return12MEx1MScore: calculatePercentileRank(holding.metrics.return12MEx1M, universeReturn12MEx1Ms, false),
+            return3MScore: calculatePercentileRank(holding.metrics.return3M, universeReturn3Ms, false),
+            pct52WeekHighScore: calculatePercentileRank(holding.metrics.pct52WeekHigh, universePct52WeekHighs, false),
+            beta3YrScore: calculatePercentileRank(holding.metrics.beta3Yr, universeBeta3Yrs, true),
+            volatility30DayScore: calculatePercentileRank(holding.metrics.volatility30Day, universeVolatility30Days, true),
+            maxDrawdownScore: calculatePercentileRank(holding.metrics.maxDrawdown, universeMaxDrawdowns, true)
+          }
+          
+          if (index === 0) {
+            console.log(`\n🎯 SCORING METHOD VERIFICATION (First Holding: ${holding.ticker})`)
+            console.log(`   Benchmark: ${benchmarkTicker}`)
+            console.log(`   Method: UNIVERSE-WIDE PERCENTILE RANKING (FALLBACK)`)
+            console.log(`   Universe size: ${universeMetrics.length}`)
+          }
         }
       } else {
-        console.warn(`No benchmark ticker found for ${holding.ticker} in ${benchmarkColumn}`)
+        console.warn(`⚠️  No benchmark ticker found for ${holding.ticker} in ${benchmarkColumn}`)
       }
       
       // Combine benchmark-relative scores with QUALITY percentile scores

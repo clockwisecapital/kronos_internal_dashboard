@@ -536,6 +536,8 @@ export function calculateTotalScore(
 /**
  * Calculate benchmark-relative scores for VALUE, MOMENTUM, and RISK
  * QUALITY remains as percentile ranking within holdings
+ * 
+ * @deprecated Use calculateBenchmarkConstituentScores instead for constituent-based ranking
  */
 export function calculateBenchmarkRelativeScores(
   stockMetrics: IndividualMetrics,
@@ -571,6 +573,65 @@ export function calculateBenchmarkRelativeScores(
     beta3YrScore: calculateBenchmarkRelativeScore(stockMetrics.beta3Yr, benchmarkMetrics.beta3Yr, true),
     volatility30DayScore: calculateBenchmarkRelativeScore(stockMetrics.volatility30Day, benchmarkMetrics.volatility30Day, true),
     maxDrawdownScore: calculateBenchmarkRelativeScore(stockMetrics.maxDrawdown, benchmarkMetrics.maxDrawdown, true),
+    financialLeverageScore: null // Skipped
+  }
+}
+
+/**
+ * Calculate benchmark constituent-based scores for VALUE, MOMENTUM, and RISK
+ * Ranks the stock against all constituents in its benchmark (e.g., all stocks in QQQ)
+ * 
+ * @param stockMetrics - The stock's individual metrics
+ * @param constituentMetrics - Array of metrics for all benchmark constituents
+ * @returns Partial scored metrics for VALUE, MOMENTUM, and RISK categories
+ */
+export function calculateBenchmarkConstituentScores(
+  stockMetrics: IndividualMetrics,
+  constituentMetrics: IndividualMetrics[]
+): Partial<ScoredMetrics> {
+  // Extract arrays of each metric from constituents
+  const peRatios = constituentMetrics.map(m => m.peRatio)
+  const evEbitdas = constituentMetrics.map(m => m.evEbitda)
+  const evSales = constituentMetrics.map(m => m.evSales)
+  
+  const return12MEx1Ms = constituentMetrics.map(m => m.return12MEx1M)
+  const return3Ms = constituentMetrics.map(m => m.return3M)
+  const pct52WeekHighs = constituentMetrics.map(m => m.pct52WeekHigh)
+  
+  const beta3Yrs = constituentMetrics.map(m => m.beta3Yr)
+  const volatility30Days = constituentMetrics.map(m => m.volatility30Day)
+  const maxDrawdowns = constituentMetrics.map(m => m.maxDrawdown)
+  
+  return {
+    // VALUE scores (lower is better - inverted)
+    peRatioScore: calculatePercentileRank(stockMetrics.peRatio, peRatios, true),
+    evEbitdaScore: calculatePercentileRank(stockMetrics.evEbitda, evEbitdas, true),
+    evSalesScore: calculatePercentileRank(stockMetrics.evSales, evSales, true),
+    // Target Price Upside: Will be calculated via universe percentile ranking
+    targetPriceUpsideScore: null,
+    
+    // MOMENTUM scores (higher is better)
+    return12MEx1MScore: calculatePercentileRank(stockMetrics.return12MEx1M, return12MEx1Ms, false),
+    return3MScore: calculatePercentileRank(stockMetrics.return3M, return3Ms, false),
+    pct52WeekHighScore: calculatePercentileRank(stockMetrics.pct52WeekHigh, pct52WeekHighs, false),
+    // EPS/Rev metrics: Will be calculated via universe percentile ranking
+    epsSurpriseScore: null,
+    revSurpriseScore: null,
+    ntmEpsChangeScore: null,
+    ntmRevChangeScore: null,
+    
+    // QUALITY scores - will be calculated separately using universe percentile ranking
+    roicTTMScore: null,
+    grossProfitabilityScore: null,
+    accrualsScore: null,
+    fcfToAssetsScore: null,
+    roic3YrScore: null,
+    ebitdaMarginScore: null,
+    
+    // RISK scores (lower is better - inverted)
+    beta3YrScore: calculatePercentileRank(stockMetrics.beta3Yr, beta3Yrs, true),
+    volatility30DayScore: calculatePercentileRank(stockMetrics.volatility30Day, volatility30Days, true),
+    maxDrawdownScore: calculatePercentileRank(stockMetrics.maxDrawdown, maxDrawdowns, true),
     financialLeverageScore: null // Skipped
   }
 }
