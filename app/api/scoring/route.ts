@@ -296,12 +296,38 @@ export async function GET(request: Request) {
     console.log('QUALITY metric weights:', Object.fromEntries(weights.get('QUALITY')?.metricWeights || []))
     
     console.log('Step 5: Fetching historical prices from Yahoo Finance...')
-    const allTickersForYahoo = [...tickers, ...benchmarkTickers]
-    const historicalPricesPromises = allTickersForYahoo.map(ticker =>
+    
+    // Collect all unique tickers we'll need historical prices for
+    const allTickersForYahoo = new Set<string>([
+      ...tickers,  // Holdings
+      ...benchmarkTickers  // Benchmark ETFs
+    ])
+    
+    // Add all tickers from weightings_universe (for constituent-based scoring)
+    console.log('Step 5a: Fetching all tickers from weightings_universe for historical prices...')
+    const { data: allWeightingsTickers } = await supabase
+      .from('weightings_universe')
+      .select('"Ticker"')
+      .limit(5000)
+    
+    if (allWeightingsTickers) {
+      allWeightingsTickers.forEach((row: any) => {
+        if (row.Ticker) {
+          allTickersForYahoo.add(row.Ticker)
+        }
+      })
+    }
+    
+    console.log(`Fetching historical prices for ${allTickersForYahoo.size} tickers (holdings + benchmarks + weightings_universe)`)
+    
+    const historicalPricesPromises = Array.from(allTickersForYahoo).map(ticker =>
       fetchHistoricalPricesForScoring(ticker)
         .then(data => ({ ticker, data }))
         .catch(error => {
-          console.error(`Failed to fetch historical prices for ${ticker}:`, error)
+          // Only log errors for holdings, not for all universe tickers (too noisy)
+          if (tickers.includes(ticker)) {
+            console.error(`Failed to fetch historical prices for holding ${ticker}:`, error)
+          }
           return {
             ticker,
             data: {
@@ -320,7 +346,7 @@ export async function GET(request: Request) {
       historicalPricesResults.map(r => [r.ticker.toUpperCase(), r.data])
     )
     
-    console.log(`Fetched historical prices for ${historicalPricesMap.size} tickers (holdings + benchmarks)`)
+    console.log(`Fetched historical prices for ${historicalPricesMap.size} tickers`)
     
     console.log('Step 6: Extracting individual metrics...')
     const holdingsWithMetrics = holdingsArray
@@ -375,6 +401,7 @@ export async function GET(request: Request) {
         "1 month volatility",
         "3 yr beta"
       `)
+      .limit(5000)
     
     if (universeError) {
       console.error('Universe data fetch error:', universeError)

@@ -81,6 +81,7 @@ export async function GET() {
       .from('universe')
       .select('*')
       .in('ticker', uniqueHoldings.map(h => h.stock_ticker))
+      .limit(5000)
 
     if (universeError) {
       console.warn('Error fetching universe data:', universeError)

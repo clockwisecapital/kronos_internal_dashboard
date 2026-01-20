@@ -13,6 +13,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('weightings_universe')
       .select('"Ticker", "Name", "SPY", "QQQ", "SOXX", "SMH", "ARKK"')
+      .limit(5000)
 
     if (error) {
       console.error('Error fetching weightings:', error)

@@ -14,6 +14,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('factset_data_v2')
       .select('"Ticker", "1 yr Beta", "3 yr beta", "5 yr beta - monthly", "Next Earnings Date", "Next Earnings Date Time of day"')
+      .limit(5000)
 
     if (error) {
       console.error('FactSet API error:', error)
