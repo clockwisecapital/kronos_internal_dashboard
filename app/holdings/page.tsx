@@ -417,7 +417,14 @@ export default function HoldingsPage() {
       // STEP 2: Calculate total portfolio value using REALTIME market values
       const totalMarketValue = holdingsWithRealtimeValues.reduce((sum, h) => sum + h.calculated_market_value, 0)
       
-      console.log(`Total Market Value: CSV-based=$${deduplicatedHoldings.reduce((sum, h) => sum + h.market_value, 0).toLocaleString()}, Realtime=$${totalMarketValue.toLocaleString()}`)
+      // STEP 2a: Calculate yesterday's total market value using previous close prices
+      const totalMVYesterday = holdingsWithRealtimeValues.reduce((sum, h) => {
+        const priceData = pricesMap.get(h.stock_ticker)
+        const prevClose = priceData?.previousClose || h.close_price
+        return sum + (prevClose * h.shares)
+      }, 0)
+      
+      console.log(`Total Market Value: CSV-based=$${deduplicatedHoldings.reduce((sum, h) => sum + h.market_value, 0).toLocaleString()}, Realtime=$${totalMarketValue.toLocaleString()}, Yesterday=$${totalMVYesterday.toLocaleString()}`)
       
       // STEP 3: Calculate all derived fields using REALTIME values
       const holdingsWithCalcs: HoldingWithCalculations[] = holdingsWithRealtimeValues.map(h => {
@@ -556,8 +563,11 @@ export default function HoldingsPage() {
                                     h.current_price ? ((h.current_price / previousClose - 1) * 100) : 
                                     0
         
-        // Calculate Basis Point Contribution: (weight × daily % change)
-        const basisPointContribution = calculatedWeight * calculatedPctChange / 100
+        // Calculate Basis Point Contribution: (yesterday's weight × daily % change)
+        // Use yesterday's market value and yesterday's total to get yesterday's weight
+        const mvYesterday = previousClose * h.shares
+        const weightYesterday = totalMVYesterday > 0 ? (mvYesterday / totalMVYesterday) * 100 : 0
+        const basisPointContribution = weightYesterday * calculatedPctChange / 100
         
         // Calculate Upside: (target_price / current_price - 1) * 100
         // Use FactSet price as additional fallback
@@ -614,9 +624,15 @@ export default function HoldingsPage() {
       const tickersWithoutYahoo = holdingsWithCalcs.filter(h => !pricesMap.has(h.stock_ticker))
       
       // Calculate Portfolio % Change Today
-      // Formula: Sum of all basis point contributions = portfolio return
-      const portfolioReturnToday = holdingsWithCalcs.reduce((sum, h) => sum + h.basis_point_contribution, 0)
+      // Formula: (totalMVToday / totalMVYesterday - 1) * 100
+      const portfolioReturnToday = totalMVYesterday > 0
+        ? ((totalMarketValue / totalMVYesterday) - 1) * 100
+        : 0
       setPortfolioReturn(portfolioReturnToday)
+      
+      // Validation: Sum of BPS contributions should match portfolio return (within rounding)
+      const bpsSum = holdingsWithCalcs.reduce((sum, h) => sum + h.basis_point_contribution, 0)
+      console.log(`Portfolio Return Validation: Direct calc=${portfolioReturnToday.toFixed(4)}%, BPS sum=${bpsSum.toFixed(4)}%`)
       
       // Fetch benchmark returns (QQQ and SPY)
       try {

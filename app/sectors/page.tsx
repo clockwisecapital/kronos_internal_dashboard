@@ -28,9 +28,9 @@ interface SectorHolding {
   isClockwiseHolding: boolean
 }
 
-type SortColumn = 'ticker' | 'pe_avg' | 'ev_ebitda_avg' | 'ev_sales_avg'
+type SortColumn = 'ticker' | 'pe_ntm' | 'ev_ebitda_ntm' | 'ev_sales_ntm'
 type SortDirection = 'asc' | 'desc'
-type HoldingSortColumn = 'ticker' | 'name' | 'weight' | 'pe_avg' | 'ev_ebitda_avg' | 'ev_sales_avg'
+type HoldingSortColumn = 'ticker' | 'name' | 'weight' | 'pe_ntm' | 'ev_ebitda_ntm' | 'ev_sales_ntm'
 
 export default function SectorsPage() {
   const [selectedSector, setSelectedSector] = useState('SPY')
@@ -198,17 +198,17 @@ export default function SectorsPage() {
         aVal = a.ticker
         bVal = b.ticker
         break
-      case 'pe_avg':
-        aVal = a.pe_avg ?? Infinity
-        bVal = b.pe_avg ?? Infinity
+      case 'pe_ntm':
+        aVal = a.pe_ntm ?? Infinity
+        bVal = b.pe_ntm ?? Infinity
         break
-      case 'ev_ebitda_avg':
-        aVal = a.ev_ebitda_avg ?? Infinity
-        bVal = b.ev_ebitda_avg ?? Infinity
+      case 'ev_ebitda_ntm':
+        aVal = a.ev_ebitda_ntm ?? Infinity
+        bVal = b.ev_ebitda_ntm ?? Infinity
         break
-      case 'ev_sales_avg':
-        aVal = a.ev_sales_avg ?? Infinity
-        bVal = b.ev_sales_avg ?? Infinity
+      case 'ev_sales_ntm':
+        aVal = a.ev_sales_ntm ?? Infinity
+        bVal = b.ev_sales_ntm ?? Infinity
         break
     }
 
@@ -238,23 +238,23 @@ export default function SectorsPage() {
         aVal = a.weight
         bVal = b.weight
         break
-      case 'pe_avg':
+      case 'pe_ntm':
         const aValuationPE = holdingsValuations.find(v => v.ticker === a.ticker)
         const bValuationPE = holdingsValuations.find(v => v.ticker === b.ticker)
-        aVal = aValuationPE?.pe_avg ?? Infinity
-        bVal = bValuationPE?.pe_avg ?? Infinity
+        aVal = aValuationPE?.pe_ntm ?? Infinity
+        bVal = bValuationPE?.pe_ntm ?? Infinity
         break
-      case 'ev_ebitda_avg':
+      case 'ev_ebitda_ntm':
         const aValuationEBITDA = holdingsValuations.find(v => v.ticker === a.ticker)
         const bValuationEBITDA = holdingsValuations.find(v => v.ticker === b.ticker)
-        aVal = aValuationEBITDA?.ev_ebitda_avg ?? Infinity
-        bVal = bValuationEBITDA?.ev_ebitda_avg ?? Infinity
+        aVal = aValuationEBITDA?.ev_ebitda_ntm ?? Infinity
+        bVal = bValuationEBITDA?.ev_ebitda_ntm ?? Infinity
         break
-      case 'ev_sales_avg':
+      case 'ev_sales_ntm':
         const aValuationSales = holdingsValuations.find(v => v.ticker === a.ticker)
         const bValuationSales = holdingsValuations.find(v => v.ticker === b.ticker)
-        aVal = aValuationSales?.ev_sales_avg ?? Infinity
-        bVal = bValuationSales?.ev_sales_avg ?? Infinity
+        aVal = aValuationSales?.ev_sales_ntm ?? Infinity
+        bVal = bValuationSales?.ev_sales_ntm ?? Infinity
         break
     }
 
@@ -301,9 +301,9 @@ export default function SectorsPage() {
                 className="px-4 py-2 border border-slate-600 rounded-lg bg-slate-900 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
               >
                 <option value="ticker">Ticker</option>
-                <option value="pe_avg">P/E Avg</option>
-                <option value="ev_ebitda_avg">EV/EBITDA Avg</option>
-                <option value="ev_sales_avg">EV/Sales Avg</option>
+                <option value="pe_ntm">P/E Avg</option>
+                <option value="ev_ebitda_ntm">EV/EBITDA Avg</option>
+                <option value="ev_sales_ntm">EV/Sales Avg</option>
               </select>
               <button
                 onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
@@ -361,7 +361,7 @@ export default function SectorsPage() {
                     </td>
                     {/* P/E NTM */}
                     <td className="text-center py-3 px-2 text-slate-300">
-                      {sector.pe_avg !== null ? sector.pe_avg.toFixed(1) : '-'}
+                      {sector.pe_ntm !== null ? sector.pe_ntm.toFixed(1) : '-'}
                     </td>
                     <td className="text-center py-3 px-2 text-slate-300">
                       {sector.pe_median !== null ? sector.pe_median.toFixed(1) : '-'}
@@ -374,7 +374,7 @@ export default function SectorsPage() {
                     </td>
                     {/* EV/EBITDA NTM */}
                     <td className="text-center py-3 px-2 text-slate-300">
-                      {sector.ev_ebitda_avg !== null ? sector.ev_ebitda_avg.toFixed(1) : '-'}
+                      {sector.ev_ebitda_ntm !== null ? sector.ev_ebitda_ntm.toFixed(1) : '-'}
                     </td>
                     <td className="text-center py-3 px-2 text-slate-300">
                       {sector.ev_ebitda_median !== null ? sector.ev_ebitda_median.toFixed(1) : '-'}
@@ -387,7 +387,7 @@ export default function SectorsPage() {
                     </td>
                     {/* EV/REVS NTM */}
                     <td className="text-center py-3 px-2 text-slate-300">
-                      {sector.ev_sales_avg !== null ? sector.ev_sales_avg.toFixed(1) : '-'}
+                      {sector.ev_sales_ntm !== null ? sector.ev_sales_ntm.toFixed(1) : '-'}
                     </td>
                     <td className="text-center py-3 px-2 text-slate-300">
                       {sector.ev_sales_median !== null ? sector.ev_sales_median.toFixed(1) : '-'}
@@ -458,9 +458,9 @@ export default function SectorsPage() {
               <option value="weight">Weight</option>
               <option value="ticker">Ticker</option>
               <option value="name">Company Name</option>
-              <option value="pe_avg">P/E Avg</option>
-              <option value="ev_ebitda_avg">EV/EBITDA Avg</option>
-              <option value="ev_sales_avg">EV/Sales Avg</option>
+              <option value="pe_ntm">P/E Avg</option>
+              <option value="ev_ebitda_ntm">EV/EBITDA Avg</option>
+              <option value="ev_sales_ntm">EV/Sales Avg</option>
             </select>
             <button
               onClick={() => setHoldingSortDirection(holdingSortDirection === 'asc' ? 'desc' : 'asc')}
@@ -542,7 +542,7 @@ export default function SectorsPage() {
                     </td>
                     {/* P/E NTM */}
                     <td className="text-center py-3 px-2 text-slate-300">
-                      {valuation?.pe_avg !== null && valuation?.pe_avg !== undefined ? valuation.pe_avg.toFixed(1) : '-'}
+                      {valuation?.pe_ntm !== null && valuation?.pe_ntm !== undefined ? valuation.pe_ntm.toFixed(1) : '-'}
                     </td>
                     <td className="text-center py-3 px-2 text-slate-300">
                       {valuation?.pe_median !== null && valuation?.pe_median !== undefined ? valuation.pe_median.toFixed(1) : '-'}
@@ -555,7 +555,7 @@ export default function SectorsPage() {
                     </td>
                     {/* EV/EBITDA NTM */}
                     <td className="text-center py-3 px-2 text-slate-300">
-                      {valuation?.ev_ebitda_avg !== null && valuation?.ev_ebitda_avg !== undefined ? valuation.ev_ebitda_avg.toFixed(1) : '-'}
+                      {valuation?.ev_ebitda_ntm !== null && valuation?.ev_ebitda_ntm !== undefined ? valuation.ev_ebitda_ntm.toFixed(1) : '-'}
                     </td>
                     <td className="text-center py-3 px-2 text-slate-300">
                       {valuation?.ev_ebitda_median !== null && valuation?.ev_ebitda_median !== undefined ? valuation.ev_ebitda_median.toFixed(1) : '-'}
@@ -568,7 +568,7 @@ export default function SectorsPage() {
                     </td>
                     {/* EV/REVS NTM */}
                     <td className="text-center py-3 px-2 text-slate-300">
-                      {valuation?.ev_sales_avg !== null && valuation?.ev_sales_avg !== undefined ? valuation.ev_sales_avg.toFixed(1) : '-'}
+                      {valuation?.ev_sales_ntm !== null && valuation?.ev_sales_ntm !== undefined ? valuation.ev_sales_ntm.toFixed(1) : '-'}
                     </td>
                     <td className="text-center py-3 px-2 text-slate-300">
                       {valuation?.ev_sales_median !== null && valuation?.ev_sales_median !== undefined ? valuation.ev_sales_median.toFixed(1) : '-'}
