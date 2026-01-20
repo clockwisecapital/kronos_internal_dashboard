@@ -452,3 +452,93 @@ export async function fetchHistoricalPricesForScoring(ticker: string): Promise<{
     }
   }
 }
+
+/**
+ * Batch fetch historical prices for multiple tickers with rate limiting
+ * Processes tickers in small batches to avoid overwhelming the system and Yahoo Finance API
+ * 
+ * @param tickers - Array of ticker symbols to fetch
+ * @param batchSize - Number of tickers to process in parallel (default: 10)
+ * @param delayMs - Delay between batches in milliseconds (default: 500ms)
+ * @returns Map of ticker to historical price data
+ */
+export async function fetchHistoricalPricesInBatches(
+  tickers: string[],
+  batchSize: number = 10,
+  delayMs: number = 500
+): Promise<Map<string, {
+  currentPrice: number
+  price30DaysAgo: number | null
+  price90DaysAgo: number | null
+  price365DaysAgo: number | null
+  maxDrawdown: number | null
+}>> {
+  const results = new Map()
+  
+  // Filter out invalid tickers
+  const validTickers = tickers.filter(ticker => {
+    const upperTicker = ticker.toUpperCase()
+    return !upperTicker.includes('CASH') && 
+           !upperTicker.includes('MONEY') && 
+           !upperTicker.includes('&') &&
+           !upperTicker.includes('OTHER') &&
+           ticker.length > 0
+  })
+  
+  console.log(`📊 Fetching historical prices for ${validTickers.length} tickers in batches of ${batchSize}`)
+  
+  // Split into batches
+  const batches: string[][] = []
+  for (let i = 0; i < validTickers.length; i += batchSize) {
+    batches.push(validTickers.slice(i, i + batchSize))
+  }
+  
+  console.log(`   Processing ${batches.length} batches...`)
+  
+  // Process each batch
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i]
+    const batchNum = i + 1
+    
+    if (batchNum % 10 === 0 || batchNum === batches.length) {
+      console.log(`   Batch ${batchNum}/${batches.length} (${results.size}/${validTickers.length} tickers fetched)`)
+    }
+    
+    // Fetch all tickers in this batch in parallel
+    const batchPromises = batch.map(ticker => 
+      fetchHistoricalPricesForScoring(ticker)
+        .then(data => ({ ticker, data }))
+        .catch(error => {
+          console.error(`   Error fetching ${ticker}:`, error.message)
+          return { 
+            ticker, 
+            data: {
+              currentPrice: 0,
+              price30DaysAgo: null,
+              price90DaysAgo: null,
+              price365DaysAgo: null,
+              maxDrawdown: null
+            }
+          }
+        })
+    )
+    
+    const batchResults = await Promise.allSettled(batchPromises)
+    
+    // Store results
+    batchResults.forEach(result => {
+      if (result.status === 'fulfilled' && result.value) {
+        results.set(result.value.ticker, result.value.data)
+      }
+    })
+    
+    // Delay between batches (except for the last one)
+    if (i < batches.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, delayMs))
+    }
+  }
+  
+  console.log(`✅ Fetched historical prices for ${results.size} tickers`)
+  
+  return results
+}

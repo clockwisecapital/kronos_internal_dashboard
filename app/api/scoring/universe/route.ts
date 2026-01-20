@@ -13,7 +13,7 @@ import {
   type StockScore,
   type IndividualMetrics
 } from '@/lib/calculators/scoring'
-import { fetchHistoricalPricesForScoring } from '@/lib/services/yahooFinance'
+import { fetchHistoricalPricesInBatches } from '@/lib/services/yahooFinance'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes for complex calculations
@@ -300,33 +300,13 @@ export async function GET(request: Request) {
     
     console.log(`Fetching historical prices for ${allTickersForYahoo.size} tickers (page + benchmarks + weightings_universe)`)
     
-    const historicalPricesPromises = Array.from(allTickersForYahoo).map(ticker =>
-      fetchHistoricalPricesForScoring(ticker)
-        .then(data => ({ ticker, data }))
-        .catch(error => {
-          // Only log errors for page tickers, not for all universe tickers (too noisy)
-          if (pageTickers.includes(ticker)) {
-            console.error(`Failed to fetch historical prices for page ticker ${ticker}:`, error)
-          }
-          return {
-            ticker,
-            data: {
-              currentPrice: 0,
-              price30DaysAgo: null,
-              price90DaysAgo: null,
-              price365DaysAgo: null,
-              maxDrawdown: null
-            }
-          }
-        })
+    // Use batched fetching to avoid overwhelming the system and Yahoo Finance API
+    // Batch size: 10 tickers at a time, 500ms delay between batches for better rate limiting
+    const historicalPricesMap = await fetchHistoricalPricesInBatches(
+      Array.from(allTickersForYahoo),
+      10,  // batch size (reduced from 15)
+      500  // delay in ms (increased from 500ms)
     )
-    
-    const historicalPricesResults = await Promise.all(historicalPricesPromises)
-    const historicalPricesMap = new Map(
-      historicalPricesResults.map(r => [r.ticker.toUpperCase(), r.data])
-    )
-    
-    console.log(`Fetched historical prices for ${historicalPricesMap.size} tickers`)
     
     console.log('Extracting individual metrics...')
     const tickersWithMetrics = pageData
