@@ -309,46 +309,157 @@ export default function TestBenchmarkPage() {
             </div>
           </div>
 
-          {/* Peer Distribution Preview - P/E */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">Peer Comparison - P/E Ratio Distribution</h2>
-            <div className="text-sm text-gray-700 mb-4">
-              Showing how {data.testTicker} compares to all {data.assignedBenchmark} constituents by P/E ratio (lower is better)
-            </div>
-            <div className="overflow-x-auto max-h-96">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-3 text-gray-900">Rank</th>
-                    <th className="text-left py-2 px-3 text-gray-900">Ticker</th>
-                    <th className="text-right py-2 px-3 text-gray-900">P/E Ratio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.benchmarkMetricsDistribution.peRatios.slice(0, 50).map((item, idx) => (
-                    <tr 
-                      key={idx} 
-                      className={`border-b ${item.ticker.toUpperCase() === data.testTicker ? 'bg-blue-100 font-bold' : 'hover:bg-gray-50'}`}
-                    >
-                      <td className="py-2 px-3 text-gray-800">{idx + 1}</td>
-                      <td className="py-2 px-3 text-gray-900">
-                        {item.ticker}
-                        {item.ticker.toUpperCase() === data.testTicker && (
-                          <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">YOU</span>
-                        )}
-                      </td>
-                      <td className="text-right py-2 px-3 text-gray-800">{formatNumber(item.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {data.benchmarkMetricsDistribution.peRatios.length > 50 && (
-                <div className="text-center py-2 text-sm text-gray-600">
-                  ... and {data.benchmarkMetricsDistribution.peRatios.length - 50} more
+          {/* Detailed Score Breakdowns */}
+          <div className="space-y-6">
+            {/* P/E Ratio */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-900">P/E Ratio (NTM) - Detailed Breakdown</h2>
+                <div className="text-sm text-gray-700 mt-2">Lower P/E is better (cheaper valuation)</div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-blue-50 rounded">
+                <div>
+                  <div className="text-sm text-gray-600">Your Value</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatNumber(data.testTickerMetrics.peRatio)}</div>
                 </div>
-              )}
+                <div>
+                  <div className="text-sm text-gray-600">Your Rank</div>
+                  <div className="text-2xl font-bold text-blue-600">{data.ranking.peRatio}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Percentile Score</div>
+                  <div className={`text-2xl font-bold ${(data.testTickerScores.peRatioScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatNumber(data.testTickerScores.peRatioScore, 1)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-700 mb-3 p-3 bg-gray-50 rounded">
+                <strong>Calculation:</strong> {data.testTicker} has a P/E of {formatNumber(data.testTickerMetrics.peRatio)}. 
+                Out of {data.benchmarkMetricsDistribution.peRatios.length} {data.assignedBenchmark} stocks with P/E data, 
+                {' '}{Math.floor((data.testTickerScores.peRatioScore || 0) / 100 * data.benchmarkMetricsDistribution.peRatios.length)} stocks have higher (worse) P/E ratios.
+                Score = {Math.floor((data.testTickerScores.peRatioScore || 0) / 100 * data.benchmarkMetricsDistribution.peRatios.length)} ÷ {data.benchmarkMetricsDistribution.peRatios.length} × 100 = {formatNumber(data.testTickerScores.peRatioScore, 1)}
+              </div>
+
+              <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-gray-900">Rank</th>
+                      <th className="text-left py-2 px-3 text-gray-900">Ticker</th>
+                      <th className="text-right py-2 px-3 text-gray-900">P/E Ratio</th>
+                      <th className="text-right py-2 px-3 text-gray-900">vs {data.testTicker}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.benchmarkMetricsDistribution.peRatios.map((item, idx) => {
+                      const isTestTicker = item.ticker.toUpperCase() === data.testTicker
+                      const diff = item.value && data.testTickerMetrics.peRatio 
+                        ? ((item.value - data.testTickerMetrics.peRatio) / data.testTickerMetrics.peRatio * 100)
+                        : null
+                      return (
+                        <tr 
+                          key={idx} 
+                          className={`border-b ${isTestTicker ? 'bg-blue-100 font-bold' : 'hover:bg-gray-50'}`}
+                        >
+                          <td className="py-2 px-3 text-gray-800">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-900">
+                            {item.ticker}
+                            {isTestTicker && (
+                              <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">YOU</span>
+                            )}
+                          </td>
+                          <td className="text-right py-2 px-3 text-gray-800">{formatNumber(item.value)}</td>
+                          <td className="text-right py-2 px-3 text-xs">
+                            {diff !== null && !isTestTicker && (
+                              <span className={diff > 0 ? 'text-red-600' : 'text-green-600'}>
+                                {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+
+            {/* EV/EBITDA */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-900">EV/EBITDA (NTM) - Detailed Breakdown</h2>
+                <div className="text-sm text-gray-700 mt-2">Lower EV/EBITDA is better (cheaper valuation)</div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-blue-50 rounded">
+                <div>
+                  <div className="text-sm text-gray-600">Your Value</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatNumber(data.testTickerMetrics.evEbitda)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Your Rank</div>
+                  <div className="text-2xl font-bold text-blue-600">{data.ranking.evEbitda}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Percentile Score</div>
+                  <div className={`text-2xl font-bold ${(data.testTickerScores.evEbitdaScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatNumber(data.testTickerScores.evEbitdaScore, 1)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-700 mb-3 p-3 bg-gray-50 rounded">
+                <strong>Calculation:</strong> {data.testTicker} has an EV/EBITDA of {formatNumber(data.testTickerMetrics.evEbitda)}. 
+                Out of {data.benchmarkMetricsDistribution.evEbitdas.length} {data.assignedBenchmark} stocks with EV/EBITDA data, 
+                {' '}{Math.floor((data.testTickerScores.evEbitdaScore || 0) / 100 * data.benchmarkMetricsDistribution.evEbitdas.length)} stocks have higher (worse) EV/EBITDA ratios.
+                Score = {Math.floor((data.testTickerScores.evEbitdaScore || 0) / 100 * data.benchmarkMetricsDistribution.evEbitdas.length)} ÷ {data.benchmarkMetricsDistribution.evEbitdas.length} × 100 = {formatNumber(data.testTickerScores.evEbitdaScore, 1)}
+              </div>
+
+              <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-gray-900">Rank</th>
+                      <th className="text-left py-2 px-3 text-gray-900">Ticker</th>
+                      <th className="text-right py-2 px-3 text-gray-900">EV/EBITDA</th>
+                      <th className="text-right py-2 px-3 text-gray-900">vs {data.testTicker}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.benchmarkMetricsDistribution.evEbitdas.map((item, idx) => {
+                      const isTestTicker = item.ticker.toUpperCase() === data.testTicker
+                      const diff = item.value && data.testTickerMetrics.evEbitda 
+                        ? ((item.value - data.testTickerMetrics.evEbitda) / data.testTickerMetrics.evEbitda * 100)
+                        : null
+                      return (
+                        <tr 
+                          key={idx} 
+                          className={`border-b ${isTestTicker ? 'bg-blue-100 font-bold' : 'hover:bg-gray-50'}`}
+                        >
+                          <td className="py-2 px-3 text-gray-800">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-900">
+                            {item.ticker}
+                            {isTestTicker && (
+                              <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">YOU</span>
+                            )}
+                          </td>
+                          <td className="text-right py-2 px-3 text-gray-800">{formatNumber(item.value)}</td>
+                          <td className="text-right py-2 px-3 text-xs">
+                            {diff !== null && !isTestTicker && (
+                              <span className={diff > 0 ? 'text-red-600' : 'text-green-600'}>
+                                {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
           {/* Data Quality Issues */}
           {(data.missingData.noFactSet.length > 0 || data.missingData.noYahoo.length > 0) && (
@@ -385,44 +496,229 @@ export default function TestBenchmarkPage() {
             </div>
           )}
 
-          {/* Peer Distribution Preview - EV/Sales */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">Peer Comparison - EV/Sales Distribution</h2>
-            <div className="text-sm text-gray-700 mb-4">
-              Showing how {data.testTicker} compares to all {data.assignedBenchmark} constituents by EV/Sales (lower is better)
-            </div>
-            <div className="overflow-x-auto max-h-96">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white">
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-3 text-gray-900">Rank</th>
-                    <th className="text-left py-2 px-3 text-gray-900">Ticker</th>
-                    <th className="text-right py-2 px-3 text-gray-900">EV/Sales</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.benchmarkMetricsDistribution.evSales.slice(0, 50).map((item, idx) => (
-                    <tr 
-                      key={idx} 
-                      className={`border-b ${item.ticker.toUpperCase() === data.testTicker ? 'bg-blue-100 font-bold' : 'hover:bg-gray-50'}`}
-                    >
-                      <td className="py-2 px-3 text-gray-800">{idx + 1}</td>
-                      <td className="py-2 px-3 text-gray-900">
-                        {item.ticker}
-                        {item.ticker.toUpperCase() === data.testTicker && (
-                          <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">YOU</span>
-                        )}
-                      </td>
-                      <td className="text-right py-2 px-3 text-gray-800">{formatNumber(item.value)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {data.benchmarkMetricsDistribution.evSales.length > 50 && (
-                <div className="text-center py-2 text-sm text-gray-600">
-                  ... and {data.benchmarkMetricsDistribution.evSales.length - 50} more
+            {/* EV/Sales */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-900">EV/Sales (NTM) - Detailed Breakdown</h2>
+                <div className="text-sm text-gray-700 mt-2">Lower EV/Sales is better (cheaper valuation)</div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-blue-50 rounded">
+                <div>
+                  <div className="text-sm text-gray-600">Your Value</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatNumber(data.testTickerMetrics.evSales)}</div>
                 </div>
-              )}
+                <div>
+                  <div className="text-sm text-gray-600">Your Rank</div>
+                  <div className="text-2xl font-bold text-blue-600">{data.ranking.evSales}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Percentile Score</div>
+                  <div className={`text-2xl font-bold ${(data.testTickerScores.evSalesScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatNumber(data.testTickerScores.evSalesScore, 1)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-700 mb-3 p-3 bg-gray-50 rounded">
+                <strong>Calculation:</strong> {data.testTicker} has an EV/Sales of {formatNumber(data.testTickerMetrics.evSales)}. 
+                Out of {data.benchmarkMetricsDistribution.evSales.length} {data.assignedBenchmark} stocks with EV/Sales data, 
+                {' '}{Math.floor((data.testTickerScores.evSalesScore || 0) / 100 * data.benchmarkMetricsDistribution.evSales.length)} stocks have higher (worse) EV/Sales ratios.
+                Score = {Math.floor((data.testTickerScores.evSalesScore || 0) / 100 * data.benchmarkMetricsDistribution.evSales.length)} ÷ {data.benchmarkMetricsDistribution.evSales.length} × 100 = {formatNumber(data.testTickerScores.evSalesScore, 1)}
+              </div>
+
+              <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-gray-900">Rank</th>
+                      <th className="text-left py-2 px-3 text-gray-900">Ticker</th>
+                      <th className="text-right py-2 px-3 text-gray-900">EV/Sales</th>
+                      <th className="text-right py-2 px-3 text-gray-900">vs {data.testTicker}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.benchmarkMetricsDistribution.evSales.map((item, idx) => {
+                      const isTestTicker = item.ticker.toUpperCase() === data.testTicker
+                      const diff = item.value && data.testTickerMetrics.evSales 
+                        ? ((item.value - data.testTickerMetrics.evSales) / data.testTickerMetrics.evSales * 100)
+                        : null
+                      return (
+                        <tr 
+                          key={idx} 
+                          className={`border-b ${isTestTicker ? 'bg-blue-100 font-bold' : 'hover:bg-gray-50'}`}
+                        >
+                          <td className="py-2 px-3 text-gray-800">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-900">
+                            {item.ticker}
+                            {isTestTicker && (
+                              <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">YOU</span>
+                            )}
+                          </td>
+                          <td className="text-right py-2 px-3 text-gray-800">{formatNumber(item.value)}</td>
+                          <td className="text-right py-2 px-3 text-xs">
+                            {diff !== null && !isTestTicker && (
+                              <span className={diff > 0 ? 'text-red-600' : 'text-green-600'}>
+                                {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 3-Month Return */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-900">3-Month Return - Detailed Breakdown</h2>
+                <div className="text-sm text-gray-700 mt-2">Higher return is better (momentum)</div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-blue-50 rounded">
+                <div>
+                  <div className="text-sm text-gray-600">Your Value</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatPercent(data.testTickerMetrics.return3M)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Your Rank</div>
+                  <div className="text-2xl font-bold text-blue-600">{data.ranking.return3M}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Percentile Score</div>
+                  <div className={`text-2xl font-bold ${(data.testTickerScores.return3MScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatNumber(data.testTickerScores.return3MScore, 1)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-700 mb-3 p-3 bg-gray-50 rounded">
+                <strong>Calculation:</strong> {data.testTicker} has a 3-month return of {formatPercent(data.testTickerMetrics.return3M)}. 
+                Out of {data.benchmarkMetricsDistribution.return3Ms.length} {data.assignedBenchmark} stocks with return data, 
+                {' '}{Math.floor((data.testTickerScores.return3MScore || 0) / 100 * data.benchmarkMetricsDistribution.return3Ms.length)} stocks have lower (worse) returns.
+                Score = {Math.floor((data.testTickerScores.return3MScore || 0) / 100 * data.benchmarkMetricsDistribution.return3Ms.length)} ÷ {data.benchmarkMetricsDistribution.return3Ms.length} × 100 = {formatNumber(data.testTickerScores.return3MScore, 1)}
+              </div>
+
+              <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-gray-900">Rank</th>
+                      <th className="text-left py-2 px-3 text-gray-900">Ticker</th>
+                      <th className="text-right py-2 px-3 text-gray-900">3M Return</th>
+                      <th className="text-right py-2 px-3 text-gray-900">vs {data.testTicker}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.benchmarkMetricsDistribution.return3Ms.map((item, idx) => {
+                      const isTestTicker = item.ticker.toUpperCase() === data.testTicker
+                      const diff = item.value && data.testTickerMetrics.return3M 
+                        ? (item.value - data.testTickerMetrics.return3M) * 100
+                        : null
+                      return (
+                        <tr 
+                          key={idx} 
+                          className={`border-b ${isTestTicker ? 'bg-blue-100 font-bold' : 'hover:bg-gray-50'}`}
+                        >
+                          <td className="py-2 px-3 text-gray-800">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-900">
+                            {item.ticker}
+                            {isTestTicker && (
+                              <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">YOU</span>
+                            )}
+                          </td>
+                          <td className="text-right py-2 px-3 text-gray-800">{formatPercent(item.value)}</td>
+                          <td className="text-right py-2 px-3 text-xs">
+                            {diff !== null && !isTestTicker && (
+                              <span className={diff > 0 ? 'text-green-600' : 'text-red-600'}>
+                                {diff > 0 ? '+' : ''}{diff.toFixed(1)}pp
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Beta */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <div className="mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Beta (3-Year) - Detailed Breakdown</h2>
+                <div className="text-sm text-gray-700 mt-2">Lower beta is better (less volatile/risky)</div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 p-4 bg-blue-50 rounded">
+                <div>
+                  <div className="text-sm text-gray-600">Your Value</div>
+                  <div className="text-2xl font-bold text-gray-900">{formatNumber(data.testTickerMetrics.beta3Yr)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Your Rank</div>
+                  <div className="text-2xl font-bold text-blue-600">{data.ranking.beta3Yr}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600">Percentile Score</div>
+                  <div className={`text-2xl font-bold ${(data.testTickerScores.beta3YrScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatNumber(data.testTickerScores.beta3YrScore, 1)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="text-sm text-gray-700 mb-3 p-3 bg-gray-50 rounded">
+                <strong>Calculation:</strong> {data.testTicker} has a beta of {formatNumber(data.testTickerMetrics.beta3Yr)}. 
+                Out of {data.benchmarkMetricsDistribution.beta3Yrs.length} {data.assignedBenchmark} stocks with beta data, 
+                {' '}{Math.floor((data.testTickerScores.beta3YrScore || 0) / 100 * data.benchmarkMetricsDistribution.beta3Yrs.length)} stocks have higher (worse) beta.
+                Score = {Math.floor((data.testTickerScores.beta3YrScore || 0) / 100 * data.benchmarkMetricsDistribution.beta3Yrs.length)} ÷ {data.benchmarkMetricsDistribution.beta3Yrs.length} × 100 = {formatNumber(data.testTickerScores.beta3YrScore, 1)}
+              </div>
+
+              <div className="overflow-x-auto max-h-96">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="border-b">
+                      <th className="text-left py-2 px-3 text-gray-900">Rank</th>
+                      <th className="text-left py-2 px-3 text-gray-900">Ticker</th>
+                      <th className="text-right py-2 px-3 text-gray-900">Beta</th>
+                      <th className="text-right py-2 px-3 text-gray-900">vs {data.testTicker}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.benchmarkMetricsDistribution.beta3Yrs.map((item, idx) => {
+                      const isTestTicker = item.ticker.toUpperCase() === data.testTicker
+                      const diff = item.value && data.testTickerMetrics.beta3Yr 
+                        ? ((item.value - data.testTickerMetrics.beta3Yr) / data.testTickerMetrics.beta3Yr * 100)
+                        : null
+                      return (
+                        <tr 
+                          key={idx} 
+                          className={`border-b ${isTestTicker ? 'bg-blue-100 font-bold' : 'hover:bg-gray-50'}`}
+                        >
+                          <td className="py-2 px-3 text-gray-800">{idx + 1}</td>
+                          <td className="py-2 px-3 text-gray-900">
+                            {item.ticker}
+                            {isTestTicker && (
+                              <span className="ml-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">YOU</span>
+                            )}
+                          </td>
+                          <td className="text-right py-2 px-3 text-gray-800">{formatNumber(item.value)}</td>
+                          <td className="text-right py-2 px-3 text-xs">
+                            {diff !== null && !isTestTicker && (
+                              <span className={diff > 0 ? 'text-red-600' : 'text-green-600'}>
+                                {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
 
