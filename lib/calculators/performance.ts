@@ -1,14 +1,14 @@
 /**
  * Performance Calculation Utilities
  * Handles return and contribution calculations for the Performance Tab
+ * Updated: 2026-01-21 - Fixed calendar vs trading days
  */
 
 import { 
   fetchPriceNDaysAgo, 
   fetchPriceCalendarDaysAgo,
   fetchPriceEndOfLastQuarter, 
-  fetchPriceEndOfLastYear,
-  isTradingDay
+  fetchPriceEndOfLastYear
 } from '@/lib/services/yahooFinance'
 
 export interface HoldingPerformance {
@@ -40,8 +40,7 @@ export function calculateReturn(currentPrice: number, previousPrice: number): nu
 export async function calculateHoldingPerformance(
   ticker: string,
   currentPrice: number,
-  weight: number,
-  marketState?: string
+  weight: number
 ): Promise<HoldingPerformance> {
   try {
     console.log(`Calculating performance for ${ticker} (weight: ${weight.toFixed(2)}%)`)
@@ -60,12 +59,7 @@ export async function calculateHoldingPerformance(
     ])
     
     // Calculate returns for each period
-    let return_1d = price1DayAgo ? calculateReturn(currentPrice, price1DayAgo) : 0
-    
-    // If today is not a trading day (weekend/holiday), 1-day return should be 0
-    if (marketState && !isTradingDay(marketState)) {
-      return_1d = 0
-    }
+    const return_1d = price1DayAgo ? calculateReturn(currentPrice, price1DayAgo) : 0
     
     const return_5d = price5DaysAgo ? calculateReturn(currentPrice, price5DaysAgo) : 0
     const return_30d = price30DaysAgo ? calculateReturn(currentPrice, price30DaysAgo) : 0
@@ -110,7 +104,7 @@ export async function calculateHoldingPerformance(
  * Processes holdings in batches to avoid overwhelming the API
  */
 export async function calculateAllHoldingsPerformance(
-  holdings: Array<{ ticker: string; currentPrice: number; weight: number; marketState?: string }>,
+  holdings: Array<{ ticker: string; currentPrice: number; weight: number }>,
   batchSize: number = 5
 ): Promise<HoldingPerformance[]> {
   const results: HoldingPerformance[] = []
@@ -122,7 +116,7 @@ export async function calculateAllHoldingsPerformance(
     console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(holdings.length / batchSize)}`)
     
     const batchResults = await Promise.all(
-      batch.map(h => calculateHoldingPerformance(h.ticker, h.currentPrice, h.weight, h.marketState))
+      batch.map(h => calculateHoldingPerformance(h.ticker, h.currentPrice, h.weight))
     )
     
     results.push(...batchResults)

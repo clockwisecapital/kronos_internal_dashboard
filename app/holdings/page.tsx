@@ -418,11 +418,10 @@ export default function HoldingsPage() {
       // STEP 2: Calculate total portfolio value using REALTIME market values
       const totalMarketValue = holdingsWithRealtimeValues.reduce((sum, h) => sum + h.calculated_market_value, 0)
       
-      // STEP 2a: Calculate yesterday's total market value using previous close prices
+      // STEP 2a: Calculate yesterday's total market value using market_value from CSV
+      // This ensures correct baseline for daily return calculation (fixes FGXXX issue where price is 100 instead of 1)
       const totalMVYesterday = holdingsWithRealtimeValues.reduce((sum, h) => {
-        const priceData = pricesMap.get(h.stock_ticker)
-        const prevClose = priceData?.previousClose || h.close_price
-        return sum + (prevClose * h.shares)
+        return sum + h.market_value
       }, 0)
       
       console.log(`Total Market Value: CSV-based=$${deduplicatedHoldings.reduce((sum, h) => sum + h.market_value, 0).toLocaleString()}, Realtime=$${totalMarketValue.toLocaleString()}, Yesterday=$${totalMVYesterday.toLocaleString()}`)
@@ -489,11 +488,17 @@ export default function HoldingsPage() {
         
         // Calculate True Beta: max(beta_1y, beta_3y, beta_5y)
         // If stock is in QQQ, also consider QQQ's betas and use the higher value
+        // Cap individual betas at 3 before taking max
         let true_beta: number | null = null
         
         if (!isCash) {
-          // Get max of stock's own betas
-          const stockMaxBeta = Math.max(beta_1y, beta_3y, beta_5y)
+          // Cap individual betas at 3
+          const capped_beta_1y = Math.min(beta_1y, 3)
+          const capped_beta_3y = Math.min(beta_3y, 3)
+          const capped_beta_5y = Math.min(beta_5y, 3)
+          
+          // Get max of stock's own betas (after capping)
+          const stockMaxBeta = Math.max(capped_beta_1y, capped_beta_3y, capped_beta_5y)
           
           // Check if stock is in QQQ (has QQQ weight)
           const isInQQQ = qqqWeight != null && qqqWeight > 0
@@ -518,7 +523,12 @@ export default function HoldingsPage() {
               qqq_beta_5y = qqqFactset.beta_1y
             }
             
-            const qqqMaxBeta = Math.max(qqq_beta_1y, qqq_beta_3y, qqq_beta_5y)
+            // Cap QQQ betas at 3
+            const capped_qqq_beta_1y = Math.min(qqq_beta_1y, 3)
+            const capped_qqq_beta_3y = Math.min(qqq_beta_3y, 3)
+            const capped_qqq_beta_5y = Math.min(qqq_beta_5y, 3)
+            
+            const qqqMaxBeta = Math.max(capped_qqq_beta_1y, capped_qqq_beta_3y, capped_qqq_beta_5y)
             
             // True beta is the higher of stock's max or QQQ's max
             true_beta = Math.max(stockMaxBeta, qqqMaxBeta)

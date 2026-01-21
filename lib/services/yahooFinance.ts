@@ -32,6 +32,7 @@ export interface PriceData {
  * 
  * Note: This function is intentionally permissive. It's better to show a small
  * 1-day return than to incorrectly show 0% on a trading day.
+ * Updated: 2026-01-21 to fix 1-day returns showing 0% during market hours
  */
 export function isTradingDay(marketState: string): boolean {
   // Market states: REGULAR, PRE, POST, CLOSED, PREPRE, POSTPOST
