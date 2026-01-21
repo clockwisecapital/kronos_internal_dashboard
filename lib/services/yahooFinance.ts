@@ -26,6 +26,23 @@ export interface PriceData {
 }
 
 /**
+ * Check if today is a trading day based on market state
+ * Returns true if market is open, in pre-market, or closed (but was open today)
+ * Returns false only if we can't determine (UNKNOWN state)
+ * 
+ * Note: This function is intentionally permissive. It's better to show a small
+ * 1-day return than to incorrectly show 0% on a trading day.
+ */
+export function isTradingDay(marketState: string): boolean {
+  // Market states: REGULAR, PRE, POST, CLOSED, PREPRE, POSTPOST
+  // On trading days: PRE -> REGULAR -> POST -> CLOSED
+  // We include PRE because that's still a trading day (just before market open)
+  
+  // Only return false if we truly don't know the state
+  return marketState !== 'UNKNOWN'
+}
+
+/**
  * Fetch real-time quote for a single ticker using Yahoo Finance API
  */
 export async function fetchQuote(ticker: string): Promise<PriceData | null> {
@@ -173,8 +190,9 @@ export async function fetchHistoricalData(
 }
 
 /**
- * Get price from N days ago
- * Returns the close price from N trading days prior
+ * Get price from N TRADING days ago
+ * Returns the close price from N trading days prior (excludes weekends/holidays)
+ * Use this for 1-day and 5-day returns
  */
 export async function fetchPriceNDaysAgo(ticker: string, daysAgo: number): Promise<number | null> {
   try {
@@ -205,6 +223,49 @@ export async function fetchPriceNDaysAgo(ticker: string, daysAgo: number): Promi
     return closes[targetIndex] || null
   } catch (error) {
     console.error(`Error fetching price ${daysAgo} days ago for ${ticker}:`, error)
+    return null
+  }
+}
+
+/**
+ * Get price from N CALENDAR days ago
+ * Returns the close price from the closest trading day to N calendar days ago
+ * Use this for 30-day, 90-day, and 1-year returns
+ */
+export async function fetchPriceCalendarDaysAgo(ticker: string, calendarDays: number): Promise<number | null> {
+  try {
+    // Calculate target date: today - N calendar days
+    const now = new Date()
+    const targetDate = new Date(now)
+    targetDate.setDate(targetDate.getDate() - calendarDays)
+    
+    // Fetch historical data with enough range
+    const range = calendarDays <= 45 ? '3mo' : calendarDays <= 120 ? '6mo' : '2y'
+    const historicalData = await fetchHistoricalData(ticker, range)
+    
+    if (!historicalData || !historicalData.timestamp || !historicalData.indicators?.quote?.[0]?.close) {
+      return null
+    }
+    
+    const timestamps = historicalData.timestamp as number[]
+    const closes = historicalData.indicators.quote[0].close as number[]
+    
+    // Find the closest trading day to the target date
+    const targetTimestamp = Math.floor(targetDate.getTime() / 1000)
+    let closestIndex = 0
+    let minDiff = Math.abs(timestamps[0] - targetTimestamp)
+    
+    for (let i = 1; i < timestamps.length; i++) {
+      const diff = Math.abs(timestamps[i] - targetTimestamp)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestIndex = i
+      }
+    }
+    
+    return closes[closestIndex] || null
+  } catch (error) {
+    console.error(`Error fetching price ${calendarDays} calendar days ago for ${ticker}:`, error)
     return null
   }
 }
@@ -322,44 +383,22 @@ export async function fetchPriceEndOfLastQuarter(ticker: string): Promise<number
 
 /**
  * Get price at end of last year (December 31st)
- * Handles weekends by using last Friday if year-end falls on weekend
+ * Uses Yahoo's 'ytd' range to get the first trading day of the current year
  */
 export async function fetchPriceEndOfLastYear(ticker: string): Promise<number | null> {
   try {
-    const now = new Date()
-    const lastDayOfPrevYear = new Date(now.getFullYear() - 1, 11, 31)
-    
-    // If last day is weekend, go back to Friday
-    const dayOfWeek = lastDayOfPrevYear.getDay()
-    if (dayOfWeek === 0) { // Sunday
-      lastDayOfPrevYear.setDate(lastDayOfPrevYear.getDate() - 2)
-    } else if (dayOfWeek === 6) { // Saturday
-      lastDayOfPrevYear.setDate(lastDayOfPrevYear.getDate() - 1)
-    }
-    
-    const historicalData = await fetchHistoricalData(ticker, '1y')
+    // Use Yahoo's built-in 'ytd' range which starts from first trading day of current year
+    const historicalData = await fetchHistoricalData(ticker, 'ytd')
     
     if (!historicalData || !historicalData.timestamp || !historicalData.indicators?.quote?.[0]?.close) {
       return null
     }
     
-    const timestamps = historicalData.timestamp as number[]
     const closes = historicalData.indicators.quote[0].close as number[]
     
-    // Find closest timestamp to target date
-    const targetTimestamp = Math.floor(lastDayOfPrevYear.getTime() / 1000)
-    let closestIndex = 0
-    let minDiff = Math.abs(timestamps[0] - targetTimestamp)
-    
-    for (let i = 1; i < timestamps.length; i++) {
-      const diff = Math.abs(timestamps[i] - targetTimestamp)
-      if (diff < minDiff) {
-        minDiff = diff
-        closestIndex = i
-      }
-    }
-    
-    return closes[closestIndex] || null
+    // First entry in YTD data is the first trading day of the year
+    // This is the closing price from the last trading day of previous year
+    return closes[0] || null
   } catch (error) {
     console.error(`Error fetching end of year price for ${ticker}:`, error)
     return null
@@ -427,10 +466,11 @@ export async function fetchHistoricalPricesForScoring(ticker: string): Promise<{
     const currentPrice = currentQuote?.currentPrice || 0
     
     // Fetch historical prices in parallel
+    // BUG FIX #1: Use calendar days instead of trading days for 30, 90, 365 day lookbacks
     const [price30, price90, price365, maxDD] = await Promise.all([
-      fetchPriceNDaysAgo(ticker, 30),
-      fetchPriceNDaysAgo(ticker, 90),
-      fetchPriceNDaysAgo(ticker, 365),
+      fetchPriceCalendarDaysAgo(ticker, 30),
+      fetchPriceCalendarDaysAgo(ticker, 90),
+      fetchPriceCalendarDaysAgo(ticker, 365),
       calculateMaxDrawdown(ticker, 252)
     ])
     

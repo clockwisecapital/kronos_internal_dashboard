@@ -11,10 +11,12 @@ export interface FactSetData {
   Ticker: string
   'EPS EST NTM': string | null // Col 7
   'EPS EST NTM - 30 days ago': string | null // Col 9
+  'EPS EST NTM - 90 days ago'?: string | null // Col 10 (optional for backwards compatibility)
   'EPS surprise last qtr': string | null // Col 13
   'Sales LTM': string | null // Col 14
   'Sales EST NTM': string | null // Col 19
   'SALES EST NTM - 30 days ago': string | null // Col 21
+  'SALES EST NTM - 90 days ago'?: string | null // Col 22 (optional for backwards compatibility)
   'SALES surprise last qtr': string | null // Col 25
   'EBITDA LTM': string | null // Col 26
   'PRICE': string | null // Col 37
@@ -282,16 +284,17 @@ export function extractIndividualMetrics(
   const epsSurprise = parseNumber(factset['EPS surprise last qtr'])
   const revSurprise = parseNumber(factset['SALES surprise last qtr'])
   
+  // BUG FIX #2: Use 90-day lookback for estimate changes (industry standard)
   const epsNTM = parseNumber(factset['EPS EST NTM'])
-  const epsNTM30DaysAgo = parseNumber(factset['EPS EST NTM - 30 days ago'])
-  const ntmEpsChange = epsNTM && epsNTM30DaysAgo && epsNTM30DaysAgo !== 0
-    ? (epsNTM / epsNTM30DaysAgo)
+  const epsNTM90DaysAgo = parseNumber(factset['EPS EST NTM - 90 days ago'])
+  const ntmEpsChange = epsNTM && epsNTM90DaysAgo && epsNTM90DaysAgo !== 0
+    ? (epsNTM / epsNTM90DaysAgo)
     : null
   
   const salesNTM = parseNumber(factset['Sales EST NTM'])
-  const salesNTM30DaysAgo = parseNumber(factset['SALES EST NTM - 30 days ago'])
-  const ntmRevChange = salesNTM && salesNTM30DaysAgo && salesNTM30DaysAgo !== 0
-    ? (salesNTM / salesNTM30DaysAgo)
+  const salesNTM90DaysAgo = parseNumber(factset['SALES EST NTM - 90 days ago'])
+  const ntmRevChange = salesNTM && salesNTM90DaysAgo && salesNTM90DaysAgo !== 0
+    ? (salesNTM / salesNTM90DaysAgo)
     : null
   
   // QUALITY metrics
@@ -599,6 +602,20 @@ export function calculateBenchmarkConstituentScores(
   const return3Ms = constituentMetrics.map(m => m.return3M)
   const pct52WeekHighs = constituentMetrics.map(m => m.pct52WeekHigh)
   
+  // BUG FIX #3: Add MOMENTUM metrics (EPS/Rev) for benchmark constituent ranking
+  const epsSurprises = constituentMetrics.map(m => m.epsSurprise)
+  const revSurprises = constituentMetrics.map(m => m.revSurprise)
+  const ntmEpsChanges = constituentMetrics.map(m => m.ntmEpsChange)
+  const ntmRevChanges = constituentMetrics.map(m => m.ntmRevChange)
+  
+  // BUG FIX #4: Add QUALITY metrics for benchmark constituent ranking
+  const roicTTMs = constituentMetrics.map(m => m.roicTTM)
+  const grossProfitabilities = constituentMetrics.map(m => m.grossProfitability)
+  const accruals = constituentMetrics.map(m => m.accruals)
+  const fcfToAssets = constituentMetrics.map(m => m.fcfToAssets)
+  const roic3Yrs = constituentMetrics.map(m => m.roic3Yr)
+  const ebitdaMargins = constituentMetrics.map(m => m.ebitdaMargin)
+  
   const beta3Yrs = constituentMetrics.map(m => m.beta3Yr)
   const volatility30Days = constituentMetrics.map(m => m.volatility30Day)
   const maxDrawdowns = constituentMetrics.map(m => m.maxDrawdown)
@@ -615,19 +632,19 @@ export function calculateBenchmarkConstituentScores(
     return12MEx1MScore: calculatePercentileRank(stockMetrics.return12MEx1M, return12MEx1Ms, false),
     return3MScore: calculatePercentileRank(stockMetrics.return3M, return3Ms, false),
     pct52WeekHighScore: calculatePercentileRank(stockMetrics.pct52WeekHigh, pct52WeekHighs, false),
-    // EPS/Rev metrics: Will be calculated via universe percentile ranking
-    epsSurpriseScore: null,
-    revSurpriseScore: null,
-    ntmEpsChangeScore: null,
-    ntmRevChangeScore: null,
+    // BUG FIX #3: Calculate EPS/Rev metrics against benchmark constituents
+    epsSurpriseScore: calculatePercentileRank(stockMetrics.epsSurprise, epsSurprises, false),
+    revSurpriseScore: calculatePercentileRank(stockMetrics.revSurprise, revSurprises, false),
+    ntmEpsChangeScore: calculatePercentileRank(stockMetrics.ntmEpsChange, ntmEpsChanges, false),
+    ntmRevChangeScore: calculatePercentileRank(stockMetrics.ntmRevChange, ntmRevChanges, false),
     
-    // QUALITY scores - will be calculated separately using universe percentile ranking
-    roicTTMScore: null,
-    grossProfitabilityScore: null,
-    accrualsScore: null,
-    fcfToAssetsScore: null,
-    roic3YrScore: null,
-    ebitdaMarginScore: null,
+    // BUG FIX #4: Calculate QUALITY metrics against benchmark constituents
+    roicTTMScore: calculatePercentileRank(stockMetrics.roicTTM, roicTTMs, false),
+    grossProfitabilityScore: calculatePercentileRank(stockMetrics.grossProfitability, grossProfitabilities, false),
+    accrualsScore: calculatePercentileRank(stockMetrics.accruals, accruals, true), // Lower is better
+    fcfToAssetsScore: calculatePercentileRank(stockMetrics.fcfToAssets, fcfToAssets, false),
+    roic3YrScore: calculatePercentileRank(stockMetrics.roic3Yr, roic3Yrs, false),
+    ebitdaMarginScore: calculatePercentileRank(stockMetrics.ebitdaMargin, ebitdaMargins, false),
     
     // RISK scores (lower is better - inverted)
     beta3YrScore: calculatePercentileRank(stockMetrics.beta3Yr, beta3Yrs, true),

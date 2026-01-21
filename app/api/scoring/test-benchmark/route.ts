@@ -29,6 +29,15 @@ interface BenchmarkTestResult {
     evSales: number | null
     return3M: number | null
     beta3Yr: number | null
+    // BUG FIX VERIFICATION: MOMENTUM metrics
+    epsSurprise: number | null
+    revSurprise: number | null
+    ntmEpsChange: number | null
+    ntmRevChange: number | null
+    // BUG FIX VERIFICATION: QUALITY metrics
+    roicTTM: number | null
+    grossProfitability: number | null
+    accruals: number | null
   }
   testTickerScores: {
     peRatioScore: number | null
@@ -36,6 +45,15 @@ interface BenchmarkTestResult {
     evSalesScore: number | null
     return3MScore: number | null
     beta3YrScore: number | null
+    // BUG FIX VERIFICATION: MOMENTUM scores
+    epsSurpriseScore: number | null
+    revSurpriseScore: number | null
+    ntmEpsChangeScore: number | null
+    ntmRevChangeScore: number | null
+    // BUG FIX VERIFICATION: QUALITY scores
+    roicTTMScore: number | null
+    grossProfitabilityScore: number | null
+    accrualsScore: number | null
   }
   benchmarkMetricsDistribution: {
     peRatios: Array<{ ticker: string, value: number | null }>
@@ -43,6 +61,15 @@ interface BenchmarkTestResult {
     evSales: Array<{ ticker: string, value: number | null }>
     return3Ms: Array<{ ticker: string, value: number | null }>
     beta3Yrs: Array<{ ticker: string, value: number | null }>
+    // BUG FIX VERIFICATION: MOMENTUM distributions
+    epsSurprises: Array<{ ticker: string, value: number | null }>
+    revSurprises: Array<{ ticker: string, value: number | null }>
+    ntmEpsChanges: Array<{ ticker: string, value: number | null }>
+    ntmRevChanges: Array<{ ticker: string, value: number | null }>
+    // BUG FIX VERIFICATION: QUALITY distributions
+    roicTTMs: Array<{ ticker: string, value: number | null }>
+    grossProfitabilities: Array<{ ticker: string, value: number | null }>
+    accruals: Array<{ ticker: string, value: number | null }>
   }
   ranking: {
     peRatio: string
@@ -50,11 +77,26 @@ interface BenchmarkTestResult {
     evSales: string
     return3M: string
     beta3Yr: string
+    // BUG FIX VERIFICATION: MOMENTUM rankings
+    epsSurprise: string
+    revSurprise: string
+    ntmEpsChange: string
+    ntmRevChange: string
+    // BUG FIX VERIFICATION: QUALITY rankings
+    roicTTM: string
+    grossProfitability: string
+    accruals: string
   }
   missingData: {
     noFactSet: string[]
     noYahoo: string[]
     incompleteMetrics: string[]
+  }
+  // BUG FIX VERIFICATION: Calculation method info
+  calculationMethod: {
+    return3M: string
+    ntmEpsChange: string
+    ntmRevChange: string
   }
 }
 
@@ -147,6 +189,7 @@ export async function GET(request: Request) {
     }
     
     // Fetch FactSet data for all constituents + test ticker
+    // BUG FIX VERIFICATION: Include MOMENTUM and QUALITY metrics
     const { data: factsetData } = await supabase
       .from('factset_data_v2')
       .select(`
@@ -157,7 +200,17 @@ export async function GET(request: Request) {
         "PRICE",
         "1 month volatility",
         "3 yr beta",
-        "52 week high"
+        "52 week high",
+        "EPS surprise last qtr",
+        "SALES surprise last qtr",
+        "EPS EST NTM",
+        "EPS EST NTM - 90 days ago",
+        "Sales EST NTM",
+        "SALES EST NTM - 90 days ago",
+        "ROIC 1 YR",
+        "Gross Profit LTM",
+        "Total assets",
+        "acrcrurals %"
       `)
       .in('Ticker', constituentTickers)
     
@@ -230,13 +283,33 @@ export async function GET(request: Request) {
     const return3Ms = constituentMetrics.map(c => c.metrics.return3M)
     const beta3Yrs = constituentMetrics.map(c => c.metrics.beta3Yr)
     
+    // BUG FIX VERIFICATION: Extract MOMENTUM metrics
+    const epsSurprises = constituentMetrics.map(c => c.metrics.epsSurprise)
+    const revSurprises = constituentMetrics.map(c => c.metrics.revSurprise)
+    const ntmEpsChanges = constituentMetrics.map(c => c.metrics.ntmEpsChange)
+    const ntmRevChanges = constituentMetrics.map(c => c.metrics.ntmRevChange)
+    
+    // BUG FIX VERIFICATION: Extract QUALITY metrics
+    const roicTTMs = constituentMetrics.map(c => c.metrics.roicTTM)
+    const grossProfitabilities = constituentMetrics.map(c => c.metrics.grossProfitability)
+    const accruals = constituentMetrics.map(c => c.metrics.accruals)
+    
     // Calculate scores for test ticker
     const testScores = {
       peRatioScore: calculatePercentileRank(testMetrics.peRatio, peRatios, true),
       evEbitdaScore: calculatePercentileRank(testMetrics.evEbitda, evEbitdas, true),
       evSalesScore: calculatePercentileRank(testMetrics.evSales, evSales, true),
       return3MScore: calculatePercentileRank(testMetrics.return3M, return3Ms, false),
-      beta3YrScore: calculatePercentileRank(testMetrics.beta3Yr, beta3Yrs, true)
+      beta3YrScore: calculatePercentileRank(testMetrics.beta3Yr, beta3Yrs, true),
+      // BUG FIX VERIFICATION: Calculate MOMENTUM scores
+      epsSurpriseScore: calculatePercentileRank(testMetrics.epsSurprise, epsSurprises, false),
+      revSurpriseScore: calculatePercentileRank(testMetrics.revSurprise, revSurprises, false),
+      ntmEpsChangeScore: calculatePercentileRank(testMetrics.ntmEpsChange, ntmEpsChanges, false),
+      ntmRevChangeScore: calculatePercentileRank(testMetrics.ntmRevChange, ntmRevChanges, false),
+      // BUG FIX VERIFICATION: Calculate QUALITY scores
+      roicTTMScore: calculatePercentileRank(testMetrics.roicTTM, roicTTMs, false),
+      grossProfitabilityScore: calculatePercentileRank(testMetrics.grossProfitability, grossProfitabilities, false),
+      accrualsScore: calculatePercentileRank(testMetrics.accruals, accruals, true) // Lower is better
     }
     
     // Build distribution arrays with ticker names
@@ -265,12 +338,60 @@ export async function GET(request: Request) {
       .filter(x => x.value !== null)
       .sort((a, b) => a.value! - b.value!)
     
+    // BUG FIX VERIFICATION: Build MOMENTUM distributions
+    const epsSurprisesWithTickers = constituentMetrics
+      .map(c => ({ ticker: c.ticker, value: c.metrics.epsSurprise }))
+      .filter(x => x.value !== null)
+      .sort((a, b) => b.value! - a.value!) // Higher is better
+    
+    const revSurprisesWithTickers = constituentMetrics
+      .map(c => ({ ticker: c.ticker, value: c.metrics.revSurprise }))
+      .filter(x => x.value !== null)
+      .sort((a, b) => b.value! - a.value!) // Higher is better
+    
+    const ntmEpsChangesWithTickers = constituentMetrics
+      .map(c => ({ ticker: c.ticker, value: c.metrics.ntmEpsChange }))
+      .filter(x => x.value !== null)
+      .sort((a, b) => b.value! - a.value!) // Higher is better
+    
+    const ntmRevChangesWithTickers = constituentMetrics
+      .map(c => ({ ticker: c.ticker, value: c.metrics.ntmRevChange }))
+      .filter(x => x.value !== null)
+      .sort((a, b) => b.value! - a.value!) // Higher is better
+    
+    // BUG FIX VERIFICATION: Build QUALITY distributions
+    const roicTTMsWithTickers = constituentMetrics
+      .map(c => ({ ticker: c.ticker, value: c.metrics.roicTTM }))
+      .filter(x => x.value !== null)
+      .sort((a, b) => b.value! - a.value!) // Higher is better
+    
+    const grossProfitabilitiesWithTickers = constituentMetrics
+      .map(c => ({ ticker: c.ticker, value: c.metrics.grossProfitability }))
+      .filter(x => x.value !== null)
+      .sort((a, b) => b.value! - a.value!) // Higher is better
+    
+    const accrualsWithTickers = constituentMetrics
+      .map(c => ({ ticker: c.ticker, value: c.metrics.accruals }))
+      .filter(x => x.value !== null)
+      .sort((a, b) => a.value! - b.value!) // Lower is better
+    
     // Calculate rankings
     const peRank = peRatiosWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
     const evEbitdaRank = evEbitdasWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
     const evSalesRank = evSalesWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
     const return3MRank = return3MsWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
     const beta3YrRank = beta3YrsWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
+    
+    // BUG FIX VERIFICATION: Calculate MOMENTUM rankings
+    const epsSurpriseRank = epsSurprisesWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
+    const revSurpriseRank = revSurprisesWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
+    const ntmEpsChangeRank = ntmEpsChangesWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
+    const ntmRevChangeRank = ntmRevChangesWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
+    
+    // BUG FIX VERIFICATION: Calculate QUALITY rankings
+    const roicTTMRank = roicTTMsWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
+    const grossProfitabilityRank = grossProfitabilitiesWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
+    const accrualsRank = accrualsWithTickers.findIndex(x => x.ticker.toUpperCase() === testTicker) + 1
     
     const result: BenchmarkTestResult = {
       success: true,
@@ -289,7 +410,16 @@ export async function GET(request: Request) {
         evEbitda: testMetrics.evEbitda,
         evSales: testMetrics.evSales,
         return3M: testMetrics.return3M,
-        beta3Yr: testMetrics.beta3Yr
+        beta3Yr: testMetrics.beta3Yr,
+        // BUG FIX VERIFICATION: MOMENTUM metrics
+        epsSurprise: testMetrics.epsSurprise,
+        revSurprise: testMetrics.revSurprise,
+        ntmEpsChange: testMetrics.ntmEpsChange,
+        ntmRevChange: testMetrics.ntmRevChange,
+        // BUG FIX VERIFICATION: QUALITY metrics
+        roicTTM: testMetrics.roicTTM,
+        grossProfitability: testMetrics.grossProfitability,
+        accruals: testMetrics.accruals
       },
       testTickerScores: testScores,
       benchmarkMetricsDistribution: {
@@ -297,19 +427,43 @@ export async function GET(request: Request) {
         evEbitdas: evEbitdasWithTickers,
         evSales: evSalesWithTickers,
         return3Ms: return3MsWithTickers,
-        beta3Yrs: beta3YrsWithTickers
+        beta3Yrs: beta3YrsWithTickers,
+        // BUG FIX VERIFICATION: MOMENTUM distributions
+        epsSurprises: epsSurprisesWithTickers,
+        revSurprises: revSurprisesWithTickers,
+        ntmEpsChanges: ntmEpsChangesWithTickers,
+        ntmRevChanges: ntmRevChangesWithTickers,
+        // BUG FIX VERIFICATION: QUALITY distributions
+        roicTTMs: roicTTMsWithTickers,
+        grossProfitabilities: grossProfitabilitiesWithTickers,
+        accruals: accrualsWithTickers
       },
       ranking: {
         peRatio: peRank > 0 ? `${peRank} of ${peRatiosWithTickers.length}` : 'N/A',
         evEbitda: evEbitdaRank > 0 ? `${evEbitdaRank} of ${evEbitdasWithTickers.length}` : 'N/A',
         evSales: evSalesRank > 0 ? `${evSalesRank} of ${evSalesWithTickers.length}` : 'N/A',
         return3M: return3MRank > 0 ? `${return3MRank} of ${return3MsWithTickers.length}` : 'N/A',
-        beta3Yr: beta3YrRank > 0 ? `${beta3YrRank} of ${beta3YrsWithTickers.length}` : 'N/A'
+        beta3Yr: beta3YrRank > 0 ? `${beta3YrRank} of ${beta3YrsWithTickers.length}` : 'N/A',
+        // BUG FIX VERIFICATION: MOMENTUM rankings
+        epsSurprise: epsSurpriseRank > 0 ? `${epsSurpriseRank} of ${epsSurprisesWithTickers.length}` : 'N/A',
+        revSurprise: revSurpriseRank > 0 ? `${revSurpriseRank} of ${revSurprisesWithTickers.length}` : 'N/A',
+        ntmEpsChange: ntmEpsChangeRank > 0 ? `${ntmEpsChangeRank} of ${ntmEpsChangesWithTickers.length}` : 'N/A',
+        ntmRevChange: ntmRevChangeRank > 0 ? `${ntmRevChangeRank} of ${ntmRevChangesWithTickers.length}` : 'N/A',
+        // BUG FIX VERIFICATION: QUALITY rankings
+        roicTTM: roicTTMRank > 0 ? `${roicTTMRank} of ${roicTTMsWithTickers.length}` : 'N/A',
+        grossProfitability: grossProfitabilityRank > 0 ? `${grossProfitabilityRank} of ${grossProfitabilitiesWithTickers.length}` : 'N/A',
+        accruals: accrualsRank > 0 ? `${accrualsRank} of ${accrualsWithTickers.length}` : 'N/A'
       },
       missingData: {
         noFactSet,
         noYahoo,
         incompleteMetrics
+      },
+      // BUG FIX VERIFICATION: Document calculation methods
+      calculationMethod: {
+        return3M: 'Using calendar days (90 days ago) instead of trading days - Bug Fix #1',
+        ntmEpsChange: 'Using 90-day lookback instead of 30-day - Bug Fix #2',
+        ntmRevChange: 'Using 90-day lookback instead of 30-day - Bug Fix #2'
       }
     }
     

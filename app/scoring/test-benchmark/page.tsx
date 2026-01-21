@@ -21,6 +21,13 @@ interface BenchmarkTestData {
     evSales: number | null
     return3M: number | null
     beta3Yr: number | null
+    epsSurprise: number | null
+    revSurprise: number | null
+    ntmEpsChange: number | null
+    ntmRevChange: number | null
+    roicTTM: number | null
+    grossProfitability: number | null
+    accruals: number | null
   }
   testTickerScores: {
     peRatioScore: number | null
@@ -28,6 +35,13 @@ interface BenchmarkTestData {
     evSalesScore: number | null
     return3MScore: number | null
     beta3YrScore: number | null
+    epsSurpriseScore: number | null
+    revSurpriseScore: number | null
+    ntmEpsChangeScore: number | null
+    ntmRevChangeScore: number | null
+    roicTTMScore: number | null
+    grossProfitabilityScore: number | null
+    accrualsScore: number | null
   }
   benchmarkMetricsDistribution: {
     peRatios: Array<{ ticker: string, value: number | null }>
@@ -35,6 +49,13 @@ interface BenchmarkTestData {
     evSales: Array<{ ticker: string, value: number | null }>
     return3Ms: Array<{ ticker: string, value: number | null }>
     beta3Yrs: Array<{ ticker: string, value: number | null }>
+    epsSurprises: Array<{ ticker: string, value: number | null }>
+    revSurprises: Array<{ ticker: string, value: number | null }>
+    ntmEpsChanges: Array<{ ticker: string, value: number | null }>
+    ntmRevChanges: Array<{ ticker: string, value: number | null }>
+    roicTTMs: Array<{ ticker: string, value: number | null }>
+    grossProfitabilities: Array<{ ticker: string, value: number | null }>
+    accruals: Array<{ ticker: string, value: number | null }>
   }
   ranking: {
     peRatio: string
@@ -42,11 +63,23 @@ interface BenchmarkTestData {
     evSales: string
     return3M: string
     beta3Yr: string
+    epsSurprise: string
+    revSurprise: string
+    ntmEpsChange: string
+    ntmRevChange: string
+    roicTTM: string
+    grossProfitability: string
+    accruals: string
   }
   missingData: {
     noFactSet: string[]
     noYahoo: string[]
     incompleteMetrics: string[]
+  }
+  calculationMethod: {
+    return3M: string
+    ntmEpsChange: string
+    ntmRevChange: string
   }
 }
 
@@ -205,6 +238,25 @@ export default function TestBenchmarkPage() {
             </div>
           </div>
 
+          {/* Bug Fix Verification Banner */}
+          <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+            <h2 className="text-2xl font-bold mb-3">🔧 Bug Fix Verification Tests</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div className="bg-white/10 rounded p-3">
+                <div className="font-semibold mb-1">Bug Fix #1: Calendar Days</div>
+                <div className="text-xs opacity-90">{data.calculationMethod.return3M}</div>
+              </div>
+              <div className="bg-white/10 rounded p-3">
+                <div className="font-semibold mb-1">Bug Fix #2: 90-Day Lookback</div>
+                <div className="text-xs opacity-90">{data.calculationMethod.ntmEpsChange}</div>
+              </div>
+              <div className="bg-white/10 rounded p-3">
+                <div className="font-semibold mb-1">Bug Fixes #3-5: Benchmark Scoring</div>
+                <div className="text-xs opacity-90">MOMENTUM & QUALITY metrics now ranked against benchmark constituents</div>
+              </div>
+            </div>
+          </div>
+
           {/* Metrics & Scores */}
           <div className="bg-white rounded-lg shadow p-6">
             <h2 className="text-xl font-bold mb-4 text-gray-900">{data.testTicker} Metrics & Scores</h2>
@@ -306,6 +358,176 @@ export default function TestBenchmarkPage() {
             <div className="mt-4 text-sm text-gray-600 bg-blue-50 border border-blue-200 rounded p-3">
               <strong className="text-gray-900">Note:</strong> Percentile scores show how {data.testTicker} ranks against all {data.assignedBenchmark} constituents. 
               A score of 70 means {data.testTicker} is better than 70% of its peers for that metric.
+            </div>
+          </div>
+
+          {/* NEW: MOMENTUM Metrics (Bug Fixes #2, #3, #5) */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-xl font-bold text-gray-900">MOMENTUM Metrics</h2>
+              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-semibold">BUG FIXES #2, #3, #5</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-4 text-gray-900">Metric</th>
+                    <th className="text-right py-2 px-4 text-gray-900">Raw Value</th>
+                    <th className="text-right py-2 px-4 text-gray-900">Percentile Score</th>
+                    <th className="text-right py-2 px-4 text-gray-900">Ranking</th>
+                    <th className="text-center py-2 px-4 text-gray-900">Performance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">EPS Surprise (Last Qtr)</td>
+                    <td className="text-right py-3 px-4 text-gray-800">{formatPercent(data.testTickerMetrics.epsSurprise)}</td>
+                    <td className="text-right py-3 px-4">
+                      <span className={`font-bold ${(data.testTickerScores.epsSurpriseScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(data.testTickerScores.epsSurpriseScore, 1)}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.ranking.epsSurprise}</td>
+                    <td className="text-center py-3 px-4">
+                      {(data.testTickerScores.epsSurpriseScore || 0) >= 50 ? 
+                        <TrendingUp className="w-5 h-5 text-green-600 inline" /> : 
+                        <TrendingDown className="w-5 h-5 text-red-600 inline" />
+                      }
+                    </td>
+                  </tr>
+                  <tr className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">Revenue Surprise (Last Qtr)</td>
+                    <td className="text-right py-3 px-4 text-gray-800">{formatPercent(data.testTickerMetrics.revSurprise)}</td>
+                    <td className="text-right py-3 px-4">
+                      <span className={`font-bold ${(data.testTickerScores.revSurpriseScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(data.testTickerScores.revSurpriseScore, 1)}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.ranking.revSurprise}</td>
+                    <td className="text-center py-3 px-4">
+                      {(data.testTickerScores.revSurpriseScore || 0) >= 50 ? 
+                        <TrendingUp className="w-5 h-5 text-green-600 inline" /> : 
+                        <TrendingDown className="w-5 h-5 text-red-600 inline" />
+                      }
+                    </td>
+                  </tr>
+                  <tr className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">
+                      NTM EPS Change (90-day)
+                      <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Fixed</span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.testTickerMetrics.ntmEpsChange ? `${((data.testTickerMetrics.ntmEpsChange - 1) * 100).toFixed(2)}%` : 'N/A'}</td>
+                    <td className="text-right py-3 px-4">
+                      <span className={`font-bold ${(data.testTickerScores.ntmEpsChangeScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(data.testTickerScores.ntmEpsChangeScore, 1)}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.ranking.ntmEpsChange}</td>
+                    <td className="text-center py-3 px-4">
+                      {(data.testTickerScores.ntmEpsChangeScore || 0) >= 50 ? 
+                        <TrendingUp className="w-5 h-5 text-green-600 inline" /> : 
+                        <TrendingDown className="w-5 h-5 text-red-600 inline" />
+                      }
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">
+                      NTM Rev Change (90-day)
+                      <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Fixed</span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.testTickerMetrics.ntmRevChange ? `${((data.testTickerMetrics.ntmRevChange - 1) * 100).toFixed(2)}%` : 'N/A'}</td>
+                    <td className="text-right py-3 px-4">
+                      <span className={`font-bold ${(data.testTickerScores.ntmRevChangeScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(data.testTickerScores.ntmRevChangeScore, 1)}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.ranking.ntmRevChange}</td>
+                    <td className="text-center py-3 px-4">
+                      {(data.testTickerScores.ntmRevChangeScore || 0) >= 50 ? 
+                        <TrendingUp className="w-5 h-5 text-green-600 inline" /> : 
+                        <TrendingDown className="w-5 h-5 text-red-600 inline" />
+                      }
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 text-sm text-gray-600 bg-purple-50 border border-purple-200 rounded p-3">
+              <strong className="text-gray-900">Bug Fixes Applied:</strong> NTM EPS/Rev Change now use 90-day lookback (Bug #2) and all MOMENTUM metrics are ranked against benchmark constituents (Bugs #3, #5).
+            </div>
+          </div>
+
+          {/* NEW: QUALITY Metrics (Bug Fixes #4, #5) */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <h2 className="text-xl font-bold text-gray-900">QUALITY Metrics</h2>
+              <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-semibold">BUG FIXES #4, #5</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-4 text-gray-900">Metric</th>
+                    <th className="text-right py-2 px-4 text-gray-900">Raw Value</th>
+                    <th className="text-right py-2 px-4 text-gray-900">Percentile Score</th>
+                    <th className="text-right py-2 px-4 text-gray-900">Ranking</th>
+                    <th className="text-center py-2 px-4 text-gray-900">Performance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">ROIC (TTM)</td>
+                    <td className="text-right py-3 px-4 text-gray-800">{formatPercent(data.testTickerMetrics.roicTTM)}</td>
+                    <td className="text-right py-3 px-4">
+                      <span className={`font-bold ${(data.testTickerScores.roicTTMScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(data.testTickerScores.roicTTMScore, 1)}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.ranking.roicTTM}</td>
+                    <td className="text-center py-3 px-4">
+                      {(data.testTickerScores.roicTTMScore || 0) >= 50 ? 
+                        <TrendingUp className="w-5 h-5 text-green-600 inline" /> : 
+                        <TrendingDown className="w-5 h-5 text-red-600 inline" />
+                      }
+                    </td>
+                  </tr>
+                  <tr className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">Gross Profitability</td>
+                    <td className="text-right py-3 px-4 text-gray-800">{formatPercent(data.testTickerMetrics.grossProfitability)}</td>
+                    <td className="text-right py-3 px-4">
+                      <span className={`font-bold ${(data.testTickerScores.grossProfitabilityScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(data.testTickerScores.grossProfitabilityScore, 1)}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.ranking.grossProfitability}</td>
+                    <td className="text-center py-3 px-4">
+                      {(data.testTickerScores.grossProfitabilityScore || 0) >= 50 ? 
+                        <TrendingUp className="w-5 h-5 text-green-600 inline" /> : 
+                        <TrendingDown className="w-5 h-5 text-red-600 inline" />
+                      }
+                    </td>
+                  </tr>
+                  <tr className="hover:bg-gray-50">
+                    <td className="py-3 px-4 font-medium text-gray-900">Accruals (Lower is Better)</td>
+                    <td className="text-right py-3 px-4 text-gray-800">{formatPercent(data.testTickerMetrics.accruals)}</td>
+                    <td className="text-right py-3 px-4">
+                      <span className={`font-bold ${(data.testTickerScores.accrualsScore || 0) >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatNumber(data.testTickerScores.accrualsScore, 1)}
+                      </span>
+                    </td>
+                    <td className="text-right py-3 px-4 text-gray-800">{data.ranking.accruals}</td>
+                    <td className="text-center py-3 px-4">
+                      {(data.testTickerScores.accrualsScore || 0) >= 50 ? 
+                        <TrendingUp className="w-5 h-5 text-green-600 inline" /> : 
+                        <TrendingDown className="w-5 h-5 text-red-600 inline" />
+                      }
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-4 text-sm text-gray-600 bg-purple-50 border border-purple-200 rounded p-3">
+              <strong className="text-gray-900">Bug Fixes Applied:</strong> All QUALITY metrics are now ranked against benchmark constituents instead of the universe (Bugs #4, #5).
             </div>
           </div>
 

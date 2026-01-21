@@ -158,10 +158,12 @@ export async function GET(request: Request) {
         "Ticker",
         "EPS EST NTM",
         "EPS EST NTM - 30 days ago",
+        "EPS EST NTM - 90 days ago",
         "EPS surprise last qtr",
         "Sales LTM",
         "Sales EST NTM",
         "SALES EST NTM - 30 days ago",
+        "SALES EST NTM - 90 days ago",
         "SALES surprise last qtr",
         "EBITDA LTM",
         "PRICE",
@@ -264,8 +266,10 @@ export async function GET(request: Request) {
         "SALES surprise last qtr",
         "EPS EST NTM",
         "EPS EST NTM - 30 days ago",
+        "EPS EST NTM - 90 days ago",
         "Sales EST NTM",
-        "SALES EST NTM - 30 days ago"
+        "SALES EST NTM - 30 days ago",
+        "SALES EST NTM - 90 days ago"
       `)
       .in('Ticker', benchmarkTickers)
     
@@ -372,10 +376,12 @@ export async function GET(request: Request) {
           "Ticker",
           "EPS EST NTM",
           "EPS EST NTM - 30 days ago",
+          "EPS EST NTM - 90 days ago",
           "EPS surprise last qtr",
           "Sales LTM",
           "Sales EST NTM",
           "SALES EST NTM - 30 days ago",
+          "SALES EST NTM - 90 days ago",
           "SALES surprise last qtr",
           "EBITDA LTM",
           "PRICE",
@@ -500,7 +506,7 @@ export async function GET(request: Request) {
         console.log(`✅ ${benchmarkTicker} has ${constituentTickers.length} constituents - using constituent-based ranking`)
         console.log(`   Sample constituents: ${constituentTickers.slice(0, 5).join(', ')}...`)
         
-        // Fetch FactSet data for constituents
+        // Fetch FactSet data for constituents (including QUALITY and MOMENTUM metrics)
         const { data: constituentFactsetData } = await supabase
           .from('factset_data_v2')
           .select(`
@@ -512,7 +518,21 @@ export async function GET(request: Request) {
             "Consensus Price Target",
             "1 month volatility",
             "3 yr beta",
-            "52 week high"
+            "52 week high",
+            "EPS surprise last qtr",
+            "SALES surprise last qtr",
+            "EPS EST NTM",
+            "EPS EST NTM - 90 days ago",
+            "Sales EST NTM",
+            "SALES EST NTM - 90 days ago",
+            "ROIC 1 YR",
+            "ROIC  3YR",
+            "Gross Profit LTM",
+            "Total assets",
+            "acrcrurals %",
+            "FCF",
+            "EBITDA LTM",
+            "Sales LTM"
           `)
           .in('Ticker', constituentTickers)
         
@@ -623,28 +643,29 @@ export async function GET(request: Request) {
       
       const stockSpecific = stockSpecificScores[index]
       
+      // BUG FIX #5: Use benchmark scores with fallback to universe scores
       const scored = {
         ...holding.metrics,
         // VALUE from benchmark-relative
         peRatioScore: benchmarkRelativeScores.peRatioScore ?? null,
         evEbitdaScore: benchmarkRelativeScores.evEbitdaScore ?? null,
         evSalesScore: benchmarkRelativeScores.evSalesScore ?? null,
-        targetPriceUpsideScore: benchmarkRelativeScores.targetPriceUpsideScore ?? stockSpecific.targetPriceUpsideScore, // Benchmark-relative, fallback to universe
-        // MOMENTUM from benchmark-relative (except EPS/Rev which are percentile)
+        targetPriceUpsideScore: benchmarkRelativeScores.targetPriceUpsideScore ?? stockSpecific.targetPriceUpsideScore,
+        // MOMENTUM from benchmark-relative with fallback to universe
         return12MEx1MScore: benchmarkRelativeScores.return12MEx1MScore ?? null,
         return3MScore: benchmarkRelativeScores.return3MScore ?? null,
         pct52WeekHighScore: benchmarkRelativeScores.pct52WeekHighScore ?? null,
-        epsSurpriseScore: stockSpecific.epsSurpriseScore, // Percentile (ETFs don't have earnings)
-        revSurpriseScore: stockSpecific.revSurpriseScore, // Percentile (ETFs don't have revenue)
-        ntmEpsChangeScore: stockSpecific.ntmEpsChangeScore, // Percentile (ETFs don't have earnings)
-        ntmRevChangeScore: stockSpecific.ntmRevChangeScore, // Percentile (ETFs don't have revenue)
-        // QUALITY from percentile ranking
-        roicTTMScore: qualityScores.roicTTMScore,
-        grossProfitabilityScore: qualityScores.grossProfitabilityScore,
-        accrualsScore: qualityScores.accrualsScore,
-        fcfToAssetsScore: qualityScores.fcfToAssetsScore,
-        roic3YrScore: qualityScores.roic3YrScore,
-        ebitdaMarginScore: qualityScores.ebitdaMarginScore,
+        epsSurpriseScore: benchmarkRelativeScores.epsSurpriseScore ?? stockSpecific.epsSurpriseScore,
+        revSurpriseScore: benchmarkRelativeScores.revSurpriseScore ?? stockSpecific.revSurpriseScore,
+        ntmEpsChangeScore: benchmarkRelativeScores.ntmEpsChangeScore ?? stockSpecific.ntmEpsChangeScore,
+        ntmRevChangeScore: benchmarkRelativeScores.ntmRevChangeScore ?? stockSpecific.ntmRevChangeScore,
+        // QUALITY from benchmark-relative with fallback to universe
+        roicTTMScore: benchmarkRelativeScores.roicTTMScore ?? qualityScores.roicTTMScore,
+        grossProfitabilityScore: benchmarkRelativeScores.grossProfitabilityScore ?? qualityScores.grossProfitabilityScore,
+        accrualsScore: benchmarkRelativeScores.accrualsScore ?? qualityScores.accrualsScore,
+        fcfToAssetsScore: benchmarkRelativeScores.fcfToAssetsScore ?? qualityScores.fcfToAssetsScore,
+        roic3YrScore: benchmarkRelativeScores.roic3YrScore ?? qualityScores.roic3YrScore,
+        ebitdaMarginScore: benchmarkRelativeScores.ebitdaMarginScore ?? qualityScores.ebitdaMarginScore,
         // RISK from benchmark-relative
         beta3YrScore: benchmarkRelativeScores.beta3YrScore ?? null,
         volatility30DayScore: benchmarkRelativeScores.volatility30DayScore ?? null,

@@ -73,14 +73,17 @@ export async function GET() {
 
     console.log('Fetching current prices...')
     const pricesMap = new Map<string, number>()
+    const marketStateMap = new Map<string, string>()
     
     for (const holding of tradeableHoldings) {
       const quoteData = await fetchQuote(holding.stock_ticker)
       if (quoteData && quoteData.currentPrice > 0) {
         pricesMap.set(holding.stock_ticker, quoteData.currentPrice)
+        marketStateMap.set(holding.stock_ticker, quoteData.marketState)
       } else {
         // Fallback to stored close_price if current price unavailable
         pricesMap.set(holding.stock_ticker, holding.close_price || holding.current_price)
+        marketStateMap.set(holding.stock_ticker, 'UNKNOWN')
       }
     }
     
@@ -103,11 +106,13 @@ export async function GET() {
     const tradeableWithPricesAndWeights = tradeableHoldings.map(h => {
       const currentPrice = pricesMap.get(h.stock_ticker) || h.close_price || h.current_price
       const weight = (h.market_value / totalNAV) * 100
+      const marketState = marketStateMap.get(h.stock_ticker) || 'UNKNOWN'
       
       return {
         ticker: h.stock_ticker,
         currentPrice,
-        weight
+        weight,
+        marketState
       }
     })
 
@@ -129,7 +134,8 @@ export async function GET() {
         benchmarksWithPrices.push({
           ticker,
           currentPrice: quoteData.currentPrice,
-          weight: 0 // Benchmarks don't have portfolio weight
+          weight: 0, // Benchmarks don't have portfolio weight
+          marketState: quoteData.marketState
         })
       }
     }
