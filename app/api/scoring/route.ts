@@ -358,37 +358,54 @@ export async function GET(request: Request) {
     console.log(`Extracted metrics for ${holdingsWithMetrics.length} holdings`)
     
     console.log('Step 7: Fetching universe data for percentile calculations...')
-    const { data: universeData, error: universeError } = await supabase
-      .from('factset_data_v2')
-      .select(`
-        "Ticker",
-        "EPS EST NTM",
-        "EPS EST NTM - 30 days ago",
-        "EPS surprise last qtr",
-        "Sales LTM",
-        "Sales EST NTM",
-        "SALES EST NTM - 30 days ago",
-        "SALES surprise last qtr",
-        "EBITDA LTM",
-        "PRICE",
-        "Gross Profit LTM",
-        "ROIC 1 YR",
-        "ROIC  3YR",
-        "acrcrurals %",
-        "FCF",
-        "Consensus Price Target",
-        "Total assets",
-        "1 month volatility",
-        "3 yr beta"
-      `)
-      .limit(5000)
     
-    if (universeError) {
-      console.error('Universe data fetch error:', universeError)
-      return NextResponse.json({ error: 'Failed to fetch universe data' }, { status: 500 })
+    // Supabase has a hard 1000 row limit, so we need to fetch in batches
+    const batchSize = 1000
+    let universeData: any[] = []
+    let start = 0
+    let hasMore = true
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('factset_data_v2')
+        .select(`
+          "Ticker",
+          "EPS EST NTM",
+          "EPS EST NTM - 30 days ago",
+          "EPS surprise last qtr",
+          "Sales LTM",
+          "Sales EST NTM",
+          "SALES EST NTM - 30 days ago",
+          "SALES surprise last qtr",
+          "EBITDA LTM",
+          "PRICE",
+          "Gross Profit LTM",
+          "ROIC 1 YR",
+          "ROIC  3YR",
+          "acrcrurals %",
+          "FCF",
+          "Consensus Price Target",
+          "Total assets",
+          "1 month volatility",
+          "3 yr beta"
+        `)
+        .range(start, start + batchSize - 1)
+
+      if (error) {
+        console.error('Universe data fetch error:', error)
+        return NextResponse.json({ error: 'Failed to fetch universe data' }, { status: 500 })
+      }
+
+      if (data && data.length > 0) {
+        universeData = universeData.concat(data)
+        start += batchSize
+        hasMore = data.length === batchSize
+      } else {
+        hasMore = false
+      }
     }
     
-    console.log(`Loaded ${universeData?.length || 0} universe tickers for percentile calculation`)
+    console.log(`Loaded ${universeData.length} universe tickers for percentile calculation (fetched in batches of ${batchSize})`)
     
     // Extract metrics from all universe tickers (using dummy Yahoo data since we only need FactSet metrics)
     const dummyYahoo = { currentPrice: 0, price30DaysAgo: null, price90DaysAgo: null, price365DaysAgo: null, maxDrawdown: null }
@@ -492,6 +509,7 @@ export async function GET(request: Request) {
             "EV/EBITDA - NTM",
             "EV/Sales - NTM",
             "PRICE",
+            "Consensus Price Target",
             "1 month volatility",
             "3 yr beta",
             "52 week high"
@@ -500,15 +518,22 @@ export async function GET(request: Request) {
         
         // Extract metrics for each constituent
         const constituentMetrics: IndividualMetrics[] = []
+        const dummyYahoo = { 
+          currentPrice: 0, 
+          price30DaysAgo: null, 
+          price90DaysAgo: null, 
+          price365DaysAgo: null, 
+          maxDrawdown: null 
+        }
+        
         constituentFactsetData?.forEach((factset: any) => {
-          const yahoo = historicalPricesMap.get(factset.Ticker.toUpperCase())
-          if (yahoo) {
-            constituentMetrics.push(extractIndividualMetrics(factset as FactSetData, yahoo))
-          }
+          const yahoo = historicalPricesMap.get(factset.Ticker.toUpperCase()) || dummyYahoo
+          constituentMetrics.push(extractIndividualMetrics(factset as FactSetData, yahoo))
         })
         
         benchmarkConstituentsCache.set(benchmarkTicker, constituentMetrics)
         console.log(`✅ Successfully loaded ${constituentMetrics.length} constituent metrics for ${benchmarkTicker}`)
+        console.log(`   (${constituentTickers.length} total constituents → ${constituentFactsetData?.length || 0} in FactSet → ${constituentMetrics.length} with metrics)`)
       } else {
         console.warn(`⚠️  Benchmark ${benchmarkTicker} has only ${constituentTickers.length} constituents, falling back to universe percentile`)
       }
@@ -564,6 +589,7 @@ export async function GET(request: Request) {
             peRatioScore: calculatePercentileRank(holding.metrics.peRatio, universePeRatios, true),
             evEbitdaScore: calculatePercentileRank(holding.metrics.evEbitda, universeEvEbitdas, true),
             evSalesScore: calculatePercentileRank(holding.metrics.evSales, universeEvSales, true),
+            targetPriceUpsideScore: calculatePercentileRank(holding.metrics.targetPriceUpside, universeTargetPrices, false),
             return12MEx1MScore: calculatePercentileRank(holding.metrics.return12MEx1M, universeReturn12MEx1Ms, false),
             return3MScore: calculatePercentileRank(holding.metrics.return3M, universeReturn3Ms, false),
             pct52WeekHighScore: calculatePercentileRank(holding.metrics.pct52WeekHigh, universePct52WeekHighs, false),
@@ -599,11 +625,11 @@ export async function GET(request: Request) {
       
       const scored = {
         ...holding.metrics,
-        // VALUE from benchmark-relative (except Target Price which is percentile)
+        // VALUE from benchmark-relative
         peRatioScore: benchmarkRelativeScores.peRatioScore ?? null,
         evEbitdaScore: benchmarkRelativeScores.evEbitdaScore ?? null,
         evSalesScore: benchmarkRelativeScores.evSalesScore ?? null,
-        targetPriceUpsideScore: stockSpecific.targetPriceUpsideScore, // Percentile (ETFs don't have targets)
+        targetPriceUpsideScore: benchmarkRelativeScores.targetPriceUpsideScore ?? stockSpecific.targetPriceUpsideScore, // Benchmark-relative, fallback to universe
         // MOMENTUM from benchmark-relative (except EPS/Rev which are percentile)
         return12MEx1MScore: benchmarkRelativeScores.return12MEx1MScore ?? null,
         return3MScore: benchmarkRelativeScores.return3MScore ?? null,

@@ -111,35 +111,54 @@ export async function GET(request: Request) {
     console.log(`Total universe tickers: ${totalCount}, Total pages: ${totalPages}`)
     
     console.log('Fetching all universe data for percentile calculations...')
-    const { data: universeData, error: universeError } = await supabase
-      .from('factset_data_v2')
-      .select(`
-        "Ticker",
-        "EPS EST NTM",
-        "EPS EST NTM - 30 days ago",
-        "EPS surprise last qtr",
-        "Sales LTM",
-        "Sales EST NTM",
-        "SALES EST NTM - 30 days ago",
-        "SALES surprise last qtr",
-        "EBITDA LTM",
-        "PRICE",
-        "Gross Profit LTM",
-        "ROIC 1 YR",
-        "ROIC  3YR",
-        "acrcrurals %",
-        "FCF",
-        "Consensus Price Target",
-        "Total assets",
-        "1 month volatility",
-        "3 yr beta"
-      `)
-      .limit(5000)
     
-    if (universeError) {
-      console.error('Universe data fetch error:', universeError)
-      return NextResponse.json({ error: 'Failed to fetch universe data' }, { status: 500 })
+    // Supabase has a hard 1000 row limit, so we need to fetch in batches
+    const batchSize = 1000
+    let universeData: any[] = []
+    let start = 0
+    let hasMore = true
+
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('factset_data_v2')
+        .select(`
+          "Ticker",
+          "EPS EST NTM",
+          "EPS EST NTM - 30 days ago",
+          "EPS surprise last qtr",
+          "Sales LTM",
+          "Sales EST NTM",
+          "SALES EST NTM - 30 days ago",
+          "SALES surprise last qtr",
+          "EBITDA LTM",
+          "PRICE",
+          "Gross Profit LTM",
+          "ROIC 1 YR",
+          "ROIC  3YR",
+          "acrcrurals %",
+          "FCF",
+          "Consensus Price Target",
+          "Total assets",
+          "1 month volatility",
+          "3 yr beta"
+        `)
+        .range(start, start + batchSize - 1)
+
+      if (error) {
+        console.error('Universe data fetch error:', error)
+        return NextResponse.json({ error: 'Failed to fetch universe data' }, { status: 500 })
+      }
+
+      if (data && data.length > 0) {
+        universeData = universeData.concat(data)
+        start += batchSize
+        hasMore = data.length === batchSize
+      } else {
+        hasMore = false
+      }
     }
+
+    console.log(`Loaded ${universeData.length} universe tickers for percentile calculation (fetched in batches of ${batchSize})`)
     
     console.log(`Loaded ${universeData?.length || 0} universe tickers for percentile calculation`)
     

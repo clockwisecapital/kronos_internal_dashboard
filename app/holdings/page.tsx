@@ -176,6 +176,7 @@ export default function HoldingsPage() {
         .select('*')
         .eq('date', latestDate)
         .order('market_value', { ascending: false })
+        .limit(5000)
       
       if (fetchError) {
         throw new Error(`Failed to fetch holdings: ${fetchError.message}`)

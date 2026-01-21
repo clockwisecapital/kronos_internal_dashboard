@@ -548,7 +548,7 @@ export function calculateBenchmarkRelativeScores(
     peRatioScore: calculateBenchmarkRelativeScore(stockMetrics.peRatio, benchmarkMetrics.peRatio, true),
     evEbitdaScore: calculateBenchmarkRelativeScore(stockMetrics.evEbitda, benchmarkMetrics.evEbitda, true),
     evSalesScore: calculateBenchmarkRelativeScore(stockMetrics.evSales, benchmarkMetrics.evSales, true),
-    // Target Price Upside: ETFs don't have price targets, will be calculated via percentile ranking
+    // Target Price Upside: Deprecated - now calculated via constituent-based percentile ranking
     targetPriceUpsideScore: null,
     
     // MOMENTUM scores (higher is better)
@@ -593,6 +593,7 @@ export function calculateBenchmarkConstituentScores(
   const peRatios = constituentMetrics.map(m => m.peRatio)
   const evEbitdas = constituentMetrics.map(m => m.evEbitda)
   const evSales = constituentMetrics.map(m => m.evSales)
+  const targetPriceUpsides = constituentMetrics.map(m => m.targetPriceUpside)
   
   const return12MEx1Ms = constituentMetrics.map(m => m.return12MEx1M)
   const return3Ms = constituentMetrics.map(m => m.return3M)
@@ -607,8 +608,8 @@ export function calculateBenchmarkConstituentScores(
     peRatioScore: calculatePercentileRank(stockMetrics.peRatio, peRatios, true),
     evEbitdaScore: calculatePercentileRank(stockMetrics.evEbitda, evEbitdas, true),
     evSalesScore: calculatePercentileRank(stockMetrics.evSales, evSales, true),
-    // Target Price Upside: Will be calculated via universe percentile ranking
-    targetPriceUpsideScore: null,
+    // Target Price Upside: Calculated against benchmark constituents (higher is better)
+    targetPriceUpsideScore: calculatePercentileRank(stockMetrics.targetPriceUpside, targetPriceUpsides, false),
     
     // MOMENTUM scores (higher is better)
     return12MEx1MScore: calculatePercentileRank(stockMetrics.return12MEx1M, return12MEx1Ms, false),

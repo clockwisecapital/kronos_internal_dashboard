@@ -16,6 +16,14 @@ export function createServiceRoleClient() {
     auth: {
       autoRefreshToken: false,
       persistSession: false
+    },
+    db: {
+      schema: 'public'
+    },
+    global: {
+      headers: {
+        'Prefer': 'return=representation'
+      }
     }
   })
 }

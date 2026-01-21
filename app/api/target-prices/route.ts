@@ -14,6 +14,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('tgt_prices')
       .select('*')
+      .limit(5000)
 
     if (error) {
       console.error('Target Prices API error:', error)

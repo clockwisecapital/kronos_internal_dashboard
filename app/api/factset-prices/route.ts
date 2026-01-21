@@ -10,20 +10,36 @@ export async function GET() {
     console.log('Fetching target prices and current prices from FactSet...')
     const supabase = createServiceRoleClient()
 
-    // Fetch target prices and current prices from FactSet (bypasses RLS with service role key)
-    const { data, error } = await supabase
-      .from('factset_data_v2')
-      .select('"Ticker", "Consensus Price Target", "PRICE"')
+    // Supabase has a hard 1000 row limit, so we need to fetch in batches
+    const batchSize = 1000
+    let allData: any[] = []
+    let start = 0
+    let hasMore = true
 
-    if (error) {
-      console.error('FactSet prices API error:', error)
-      throw error
+    while (hasMore) {
+      const { data, error } = await supabase
+        .from('factset_data_v2')
+        .select('"Ticker", "Consensus Price Target", "PRICE"')
+        .range(start, start + batchSize - 1)
+
+      if (error) {
+        console.error('FactSet prices API error:', error)
+        throw error
+      }
+
+      if (data && data.length > 0) {
+        allData = allData.concat(data)
+        start += batchSize
+        hasMore = data.length === batchSize
+      } else {
+        hasMore = false
+      }
     }
 
-    console.log(`FactSet Prices API: Loaded ${data?.length || 0} records`)
+    console.log(`FactSet Prices API: Loaded ${allData.length} records (fetched in batches of ${batchSize})`)
 
     // Process the data to return clean objects
-    const processedData = (data || []).map(row => {
+    const processedData = allData.map(row => {
       const ticker = row.Ticker?.trim().toUpperCase() || ''
       const targetPriceStr = row['Consensus Price Target']
       const currentPriceStr = row['PRICE']

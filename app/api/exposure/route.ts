@@ -167,6 +167,7 @@ export async function GET(request: Request) {
       .select('*')
       .eq('date', latestDate)
       .order('market_value', { ascending: false })
+      .limit(5000)
 
     if (holdingsError || !holdings || holdings.length === 0) {
       throw new Error('Failed to fetch holdings')
@@ -225,6 +226,7 @@ export async function GET(request: Request) {
     const { data: allGicsData, error: gicsError } = await supabase
       .from('gics_yahoo_finance')
       .select('"Ticker", "GICS Sector", "Risk on/off Score", "Core / Non-Core"')
+      .limit(5000)
 
     if (gicsError) {
       console.warn('Failed to fetch GICS data:', gicsError.message)

@@ -35,6 +35,7 @@ export async function GET() {
       .select('*')
       .eq('date', latestDate)
       .order('market_value', { ascending: false })
+      .limit(5000)
 
     if (holdingsError) {
       throw new Error(`Failed to fetch holdings: ${holdingsError.message}`)

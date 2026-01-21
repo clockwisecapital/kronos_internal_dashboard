@@ -97,6 +97,7 @@ export async function GET() {
       .select('stock_ticker, market_value')
       .eq('date', latestDate)
       .order('market_value', { ascending: false })
+      .limit(5000)
 
     if (holdingsError || !holdings || holdings.length === 0) {
       throw new Error('Failed to fetch holdings')

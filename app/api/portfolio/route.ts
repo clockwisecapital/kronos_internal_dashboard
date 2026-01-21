@@ -93,6 +93,7 @@ export async function GET(request: Request) {
       .select('*')
       .eq('date', latestDate)
       .order('market_value', { ascending: false })
+      .limit(5000)
 
     if (holdingsError) {
       throw new Error(`Failed to fetch holdings: ${holdingsError.message}`)
@@ -151,6 +152,7 @@ export async function GET(request: Request) {
     const { data: weightingsData, error: weightingsError } = await supabaseServiceRole
       .from('weightings_universe')
       .select('"Ticker", "Name", "SPY", "QQQ", "SOXX", "SMH", "ARKK"')
+      .limit(5000)
 
     if (weightingsError) {
       console.error('Error fetching weightings:', weightingsError)
