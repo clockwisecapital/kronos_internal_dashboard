@@ -187,7 +187,7 @@ export async function GET(request: Request) {
         "FCF",
         "Consensus Price Target",
         "Total assets",
-        "1 month volatility",
+        "2 month vol",
         "3 yr beta",
         "EV/EBITDA - NTM",
         "EV/Sales - NTM",

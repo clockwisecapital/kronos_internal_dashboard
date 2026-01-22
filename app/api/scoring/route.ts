@@ -174,8 +174,9 @@ export async function GET(request: Request) {
         "FCF",
         "Consensus Price Target",
         "Total assets",
-        "1 month volatility",
+        "2 month vol",
         "3 yr beta",
+        "ND",
         "EV/EBITDA - NTM",
         "EV/Sales - NTM",
         "P/E NTM",
@@ -258,7 +259,7 @@ export async function GET(request: Request) {
         "EV/EBITDA - NTM",
         "EV/Sales - NTM",
         "PRICE",
-        "1 month volatility",
+        "2 month vol",
         "3 yr beta",
         "52 week high",
         "Consensus Price Target",
@@ -392,8 +393,9 @@ export async function GET(request: Request) {
           "FCF",
           "Consensus Price Target",
           "Total assets",
-          "1 month volatility",
-          "3 yr beta"
+          "2 month vol",
+          "3 yr beta",
+          "ND"
         `)
         .range(start, start + batchSize - 1)
 
@@ -440,7 +442,7 @@ export async function GET(request: Request) {
     const universeReturn3Ms = universeMetrics.map(m => m.return3M)
     const universePct52WeekHighs = universeMetrics.map(m => m.pct52WeekHigh)
     const universeBeta3Yrs = universeMetrics.map(m => m.beta3Yr)
-    const universeVolatility30Days = universeMetrics.map(m => m.volatility30Day)
+    const universeVolatility60Days = universeMetrics.map(m => m.volatility60Day)
     const universeMaxDrawdowns = universeMetrics.map(m => m.maxDrawdown)
     
     // 7b. Calculate QUALITY scores using universe-wide percentile ranking
@@ -516,7 +518,7 @@ export async function GET(request: Request) {
             "EV/Sales - NTM",
             "PRICE",
             "Consensus Price Target",
-            "1 month volatility",
+            "2 month vol",
             "3 yr beta",
             "52 week high",
             "EPS surprise last qtr",
@@ -614,7 +616,7 @@ export async function GET(request: Request) {
             return3MScore: calculatePercentileRank(holding.metrics.return3M, universeReturn3Ms, false),
             pct52WeekHighScore: calculatePercentileRank(holding.metrics.pct52WeekHigh, universePct52WeekHighs, false),
             beta3YrScore: calculatePercentileRank(holding.metrics.beta3Yr, universeBeta3Yrs, true),
-            volatility30DayScore: calculatePercentileRank(holding.metrics.volatility30Day, universeVolatility30Days, true),
+            volatility60DayScore: calculatePercentileRank(holding.metrics.volatility60Day, universeVolatility60Days, true),
             maxDrawdownScore: calculatePercentileRank(holding.metrics.maxDrawdown, universeMaxDrawdowns, true)
           }
           
@@ -668,7 +670,7 @@ export async function GET(request: Request) {
         ebitdaMarginScore: benchmarkRelativeScores.ebitdaMarginScore ?? qualityScores.ebitdaMarginScore,
         // RISK from benchmark-relative
         beta3YrScore: benchmarkRelativeScores.beta3YrScore ?? null,
-        volatility30DayScore: benchmarkRelativeScores.volatility30DayScore ?? null,
+        volatility60DayScore: benchmarkRelativeScores.volatility60DayScore ?? null,
         maxDrawdownScore: benchmarkRelativeScores.maxDrawdownScore ?? null,
         financialLeverageScore: null
       }

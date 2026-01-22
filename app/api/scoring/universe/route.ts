@@ -139,8 +139,9 @@ export async function GET(request: Request) {
           "FCF",
           "Consensus Price Target",
           "Total assets",
-          "1 month volatility",
-          "3 yr beta"
+          "2 month vol",
+          "3 yr beta",
+          "ND"
         `)
         .range(start, start + batchSize - 1)
 
@@ -189,7 +190,7 @@ export async function GET(request: Request) {
     const universeReturn3Ms = universeMetrics.map(m => m.return3M)
     const universePct52WeekHighs = universeMetrics.map(m => m.pct52WeekHigh)
     const universeBeta3Yrs = universeMetrics.map(m => m.beta3Yr)
-    const universeVolatility30Days = universeMetrics.map(m => m.volatility30Day)
+    const universeVolatility60Days = universeMetrics.map(m => m.volatility60Day)
     const universeMaxDrawdowns = universeMetrics.map(m => m.maxDrawdown)
     
     console.log(`Step 3: Fetching page ${page} tickers...`)
@@ -214,8 +215,9 @@ export async function GET(request: Request) {
         "FCF",
         "Consensus Price Target",
         "Total assets",
-        "1 month volatility",
+        "2 month vol",
         "3 yr beta",
+        "ND",
         "EV/EBITDA - NTM",
         "EV/Sales - NTM",
         "P/E NTM",
@@ -267,7 +269,7 @@ export async function GET(request: Request) {
         "EV/EBITDA - NTM",
         "EV/Sales - NTM",
         "PRICE",
-        "1 month volatility",
+        "2 month vol",
         "3 yr beta",
         "52 week high"
       `)
@@ -414,7 +416,7 @@ export async function GET(request: Request) {
             "EV/EBITDA - NTM",
             "EV/Sales - NTM",
             "PRICE",
-            "1 month volatility",
+            "2 month vol",
             "3 yr beta",
             "52 week high"
           `)
@@ -485,7 +487,7 @@ export async function GET(request: Request) {
             return3MScore: calculatePercentileRank(ticker.metrics.return3M, universeReturn3Ms, false),
             pct52WeekHighScore: calculatePercentileRank(ticker.metrics.pct52WeekHigh, universePct52WeekHighs, false),
             beta3YrScore: calculatePercentileRank(ticker.metrics.beta3Yr, universeBeta3Yrs, true),
-            volatility30DayScore: calculatePercentileRank(ticker.metrics.volatility30Day, universeVolatility30Days, true),
+            volatility60DayScore: calculatePercentileRank(ticker.metrics.volatility60Day, universeVolatility60Days, true),
             maxDrawdownScore: calculatePercentileRank(ticker.metrics.maxDrawdown, universeMaxDrawdowns, true)
           }
           
@@ -524,7 +526,7 @@ export async function GET(request: Request) {
         ebitdaMarginScore: qualityScores.ebitdaMarginScore,
         // RISK from benchmark-relative
         beta3YrScore: benchmarkRelativeScores.beta3YrScore ?? null,
-        volatility30DayScore: benchmarkRelativeScores.volatility30DayScore ?? null,
+        volatility60DayScore: benchmarkRelativeScores.volatility60DayScore ?? null,
         maxDrawdownScore: benchmarkRelativeScores.maxDrawdownScore ?? null,
         financialLeverageScore: null
       }

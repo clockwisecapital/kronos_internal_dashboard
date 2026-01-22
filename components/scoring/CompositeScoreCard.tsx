@@ -85,14 +85,14 @@ export default function CompositeScoreCard({
                 <div className="flex items-center gap-4">
                   {/* Raw Value */}
                   <div className="text-sm text-slate-400 min-w-[80px] text-right">
-                    {metric.value !== null ? (
+                    {metric.value !== null && !isNaN(metric.value) ? (
                       metric.format === 'percentage' ? 
                         `${(metric.value * 100).toFixed(1)}%` :
                       metric.format === 'ratio' ?
                         metric.value.toFixed(2) :
                         metric.value.toFixed(1)
                     ) : (
-                      <span className="text-slate-500">N/A</span>
+                      <span className="text-slate-500">-</span>
                     )}
                   </div>
                   

@@ -66,6 +66,8 @@ interface StockScore {
   volatility30DayScore: number | null
   maxDrawdown: number | null
   maxDrawdownScore: number | null
+  financialLeverage: number | null
+  financialLeverageScore: number | null
   riskScore: number | null
   
   // Total
@@ -411,7 +413,8 @@ export default function ScoringPage() {
                             metrics={[
                               { name: 'Beta 3-Yr', value: stock.beta3Yr, score: stock.beta3YrScore, format: 'ratio', invertColor: true },
                               { name: '30-Day Volatility', value: stock.volatility30Day, score: stock.volatility30DayScore, format: 'percentage', invertColor: true },
-                              { name: 'Max Drawdown', value: stock.maxDrawdown, score: stock.maxDrawdownScore, format: 'percentage', invertColor: true }
+                              { name: 'Max Drawdown', value: stock.maxDrawdown, score: stock.maxDrawdownScore, format: 'percentage', invertColor: true },
+                              { name: 'Financial Leverage', value: stock.financialLeverage, score: stock.financialLeverageScore, format: 'ratio', invertColor: true }
                             ]}
                           />
                         </div>
@@ -630,7 +633,8 @@ export default function ScoringPage() {
                               metrics={[
                                 { name: 'Beta 3-Yr', value: stock.beta3Yr, score: stock.beta3YrScore, format: 'ratio', invertColor: true },
                                 { name: '30-Day Volatility', value: stock.volatility30Day, score: stock.volatility30DayScore, format: 'percentage', invertColor: true },
-                                { name: 'Max Drawdown', value: stock.maxDrawdown, score: stock.maxDrawdownScore, format: 'percentage', invertColor: true }
+                                { name: 'Max Drawdown', value: stock.maxDrawdown, score: stock.maxDrawdownScore, format: 'percentage', invertColor: true },
+                                { name: 'Financial Leverage', value: stock.financialLeverage, score: stock.financialLeverageScore, format: 'ratio', invertColor: true }
                               ]}
                             />
                           </div>

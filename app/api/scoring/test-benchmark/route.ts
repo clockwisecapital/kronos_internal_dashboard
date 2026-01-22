@@ -198,7 +198,7 @@ export async function GET(request: Request) {
         "EV/EBITDA - NTM",
         "EV/Sales - NTM",
         "PRICE",
-        "1 month volatility",
+        "2 month vol",
         "3 yr beta",
         "52 week high",
         "EPS surprise last qtr",

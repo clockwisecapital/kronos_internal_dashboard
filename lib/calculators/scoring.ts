@@ -27,8 +27,9 @@ export interface FactSetData {
   'FCF': string | null // Col 57
   'Consensus Price Target': string | null // Col 58
   'Total assets': string | null // Col 64
-  '1 month volatility': string | null // Col 65
+  '2 month vol': string | null // Col 69
   '3 yr beta': string | null // Col 69
+  'ND': string | null // Net Debt
   'EV/EBITDA - NTM': string | null // Col 72
   'EV/Sales - NTM': string | null // Col 73
   'P/E NTM': string | null // Col 74
@@ -77,7 +78,7 @@ export interface IndividualMetrics {
   
   // RISK
   beta3Yr: number | null
-  volatility30Day: number | null
+  volatility60Day: number | null
   maxDrawdown: number | null
   financialLeverage: number | null
 }
@@ -105,7 +106,7 @@ export interface ScoredMetrics extends IndividualMetrics {
   ebitdaMarginScore: number | null
   
   beta3YrScore: number | null
-  volatility30DayScore: number | null
+  volatility60DayScore: number | null
   maxDrawdownScore: number | null
   financialLeverageScore: number | null
 }
@@ -132,7 +133,10 @@ export interface StockScore extends ScoredMetrics, CompositeScores, TotalScore {
  */
 export function parseNumber(value: string | null | undefined): number | null {
   if (value === null || value === undefined || value === '') return null
-  const num = parseFloat(value)
+  // Handle FactSet's "#N/A" and other error strings
+  const strValue = String(value).trim()
+  if (strValue === '#N/A' || strValue === '#N/A N/A' || strValue === 'N/A' || strValue === '#VALUE!' || strValue === '#DIV/0!' || strValue === 'NaN' || strValue === 'nan') return null
+  const num = parseFloat(strValue)
   return isNaN(num) ? null : num
 }
 
@@ -281,8 +285,13 @@ export function extractIndividualMetrics(
   const week52High = parseNumber(factset['52 week high'])
   const pct52WeekHigh = price && week52High ? (price / week52High) : null
   
-  const epsSurprise = parseNumber(factset['EPS surprise last qtr'])
-  const revSurprise = parseNumber(factset['SALES surprise last qtr'])
+  // BUG FIX: FactSet returns these as percentages (e.g., 4.099 = 4.099%), so divide by 100
+  const epsSurprise = parseNumber(factset['EPS surprise last qtr']) !== null 
+    ? parseNumber(factset['EPS surprise last qtr'])! / 100 
+    : null
+  const revSurprise = parseNumber(factset['SALES surprise last qtr']) !== null 
+    ? parseNumber(factset['SALES surprise last qtr'])! / 100 
+    : null
   
   // BUG FIX #2: Use 90-day lookback for estimate changes (industry standard)
   const epsNTM = parseNumber(factset['EPS EST NTM'])
@@ -322,9 +331,13 @@ export function extractIndividualMetrics(
   
   // RISK metrics
   const beta3Yr = parseNumber(factset['3 yr beta'])
-  const volatility30Day = parseNumber(factset['1 month volatility'])
+  const volatility60Day = parseNumber(factset['2 month vol'])
   const maxDrawdown = yahoo.maxDrawdown
-  const financialLeverage = null // Skipped for now
+  const netDebt = parseNumber(factset['ND'])
+  const ebitdaLTM = parseNumber(factset['EBITDA LTM'])
+  const financialLeverage = netDebt && ebitdaLTM && ebitdaLTM !== 0
+    ? (netDebt / ebitdaLTM)
+    : null
   
   return {
     peRatio,
@@ -345,7 +358,7 @@ export function extractIndividualMetrics(
     roic3Yr,
     ebitdaMargin,
     beta3Yr,
-    volatility30Day,
+    volatility60Day,
     maxDrawdown,
     financialLeverage
   }
@@ -381,7 +394,7 @@ export function calculatePercentileScores(
   const ebitdaMargins = allMetrics.map(m => m.ebitdaMargin)
   
   const beta3Yrs = allMetrics.map(m => m.beta3Yr)
-  const volatility30Days = allMetrics.map(m => m.volatility30Day)
+  const volatility60Days = allMetrics.map(m => m.volatility60Day)
   const maxDrawdowns = allMetrics.map(m => m.maxDrawdown)
   const financialLeverages = allMetrics.map(m => m.financialLeverage)
   
@@ -413,7 +426,7 @@ export function calculatePercentileScores(
     
     // RISK scores (lower risk is better)
     beta3YrScore: calculatePercentileRank(metrics.beta3Yr, beta3Yrs, true),
-    volatility30DayScore: calculatePercentileRank(metrics.volatility30Day, volatility30Days, true),
+    volatility60DayScore: calculatePercentileRank(metrics.volatility60Day, volatility60Days, true),
     maxDrawdownScore: calculatePercentileRank(metrics.maxDrawdown, maxDrawdowns, true),
     financialLeverageScore: calculatePercentileRank(metrics.financialLeverage, financialLeverages, true)
   }))
@@ -492,14 +505,15 @@ export function calculateCompositeScores(
   const riskScore = riskWeights ? calculateWeightedAverage(
     [
       scoredMetrics.beta3YrScore,
-      scoredMetrics.volatility30DayScore,
-      scoredMetrics.maxDrawdownScore
-      // Financial leverage skipped
+      scoredMetrics.volatility60DayScore,
+      scoredMetrics.maxDrawdownScore,
+      scoredMetrics.financialLeverageScore
     ],
     [
       riskWeights.metricWeights.get('Beta 3-Yr') || 0,
-      riskWeights.metricWeights.get('30-Day Volatility') || 0,
-      riskWeights.metricWeights.get('Max Drawdown') || 0
+      riskWeights.metricWeights.get('60-Day Volatility') || 0,
+      riskWeights.metricWeights.get('Max Drawdown') || 0,
+      riskWeights.metricWeights.get('Financial Leverage') || 0
     ]
   ) : null
   
@@ -574,7 +588,7 @@ export function calculateBenchmarkRelativeScores(
     
     // RISK scores (lower is better - inverted)
     beta3YrScore: calculateBenchmarkRelativeScore(stockMetrics.beta3Yr, benchmarkMetrics.beta3Yr, true),
-    volatility30DayScore: calculateBenchmarkRelativeScore(stockMetrics.volatility30Day, benchmarkMetrics.volatility30Day, true),
+    volatility60DayScore: calculateBenchmarkRelativeScore(stockMetrics.volatility60Day, benchmarkMetrics.volatility60Day, true),
     maxDrawdownScore: calculateBenchmarkRelativeScore(stockMetrics.maxDrawdown, benchmarkMetrics.maxDrawdown, true),
     financialLeverageScore: null // Skipped
   }
@@ -617,7 +631,7 @@ export function calculateBenchmarkConstituentScores(
   const ebitdaMargins = constituentMetrics.map(m => m.ebitdaMargin)
   
   const beta3Yrs = constituentMetrics.map(m => m.beta3Yr)
-  const volatility30Days = constituentMetrics.map(m => m.volatility30Day)
+  const volatility60Days = constituentMetrics.map(m => m.volatility60Day)
   const maxDrawdowns = constituentMetrics.map(m => m.maxDrawdown)
   
   return {
@@ -648,7 +662,7 @@ export function calculateBenchmarkConstituentScores(
     
     // RISK scores (lower is better - inverted)
     beta3YrScore: calculatePercentileRank(stockMetrics.beta3Yr, beta3Yrs, true),
-    volatility30DayScore: calculatePercentileRank(stockMetrics.volatility30Day, volatility30Days, true),
+    volatility60DayScore: calculatePercentileRank(stockMetrics.volatility60Day, volatility60Days, true),
     maxDrawdownScore: calculatePercentileRank(stockMetrics.maxDrawdown, maxDrawdowns, true),
     financialLeverageScore: null // Skipped
   }
