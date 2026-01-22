@@ -344,7 +344,7 @@ export default function HoldingsPage() {
       console.log('=== FETCHING SCORES ===')
       let scoresMap = new Map<string, number>()
       try {
-        const scoringResponse = await fetch('/api/scoring?profile=BASE&benchmark=BENCHMARK1')
+        const scoringResponse = await fetch('/api/scoring?profile=BASE&benchmark=BENCHMARK3')
         if (scoringResponse.ok) {
           const scoringResult = await scoringResponse.json()
           if (scoringResult.success && scoringResult.data) {
