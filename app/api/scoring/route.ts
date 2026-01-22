@@ -15,9 +15,70 @@ import {
   type IndividualMetrics
 } from '@/lib/calculators/scoring'
 import { fetchHistoricalPricesInBatches } from '@/lib/services/yahooFinance'
+import { fetchHistoricalPricesWithCache } from '@/lib/services/yahooFinanceCache'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300 // 5 minutes for complex calculations
+
+/**
+ * Hardcoded blacklist of tickers that consistently 404 on Yahoo Finance
+ * These are filtered out before any API calls to save time
+ */
+const TICKER_BLACKLIST = new Set([
+  // Class A shares that don't exist on Yahoo
+  'GTN-A', 'HEI-A', 'TAP-A', 'MOG-A',
+  // Class B shares that don't exist
+  'LEN-B', 'MOG-B', 'WSO-B',
+  // Other problematic suffixes
+  'MKC-V',
+  // Add more as they're discovered
+])
+
+/**
+ * Validates and normalizes a ticker symbol for Yahoo Finance API
+ * Returns null for invalid tickers
+ */
+function validateAndNormalizeTicker(ticker: string | null | undefined): string | null {
+  if (!ticker || typeof ticker !== 'string') return null
+  
+  const trimmed = ticker.trim().toUpperCase()
+  
+  // Filter out obvious invalid tickers
+  if (trimmed === '' || 
+      trimmed === '-' || 
+      trimmed.startsWith('#') ||
+      trimmed === 'N/A' ||
+      trimmed === 'NULL' ||
+      trimmed.includes('CASH') ||
+      trimmed.includes('FGXXX') ||
+      trimmed.includes('OTHER')) {
+    return null
+  }
+  
+  // Remove common suffixes that Yahoo Finance doesn't recognize
+  let normalized = trimmed
+    .replace(/\s+UW$/, '')  // Remove " UW" suffix
+    .replace(/\s+UN$/, '')  // Remove " UN" suffix  
+    .replace(/\s+AS OF.*$/, '')  // Remove " AS OF date" comments
+    .trim()
+  
+  // Handle Class A/B/V shares - convert dots to hyphens for Yahoo format
+  normalized = normalized
+    .replace(/\.A$/,'-A')
+    .replace(/\.B$/, '-B')
+    .replace(/\.V$/, '-V')
+  
+  // Check hardcoded blacklist AFTER normalization
+  if (TICKER_BLACKLIST.has(normalized)) {
+    return null
+  }
+  
+  // Must have at least 1 character and only valid ticker characters
+  if (normalized.length === 0) return null
+  if (!/^[A-Z0-9.\-^]+$/.test(normalized)) return null
+  
+  return normalized
+}
 
 interface HoldingData {
   stock_ticker: string
@@ -94,6 +155,8 @@ async function fetchBenchmarkConstituents(
     const constituents = (data || [])
       .filter((row: any) => row[columnName] && row[columnName] !== '-')
       .map((row: any) => row.Ticker)
+      .map((ticker: string) => validateAndNormalizeTicker(ticker))
+      .filter((ticker: string | null): ticker is string => ticker !== null)
     
     console.log(`Found ${constituents.length} constituents for ${normalizedTicker}`)
     return constituents
@@ -108,82 +171,151 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const profile = searchParams.get('profile') || 'BASE'
     const benchmarkColumn = searchParams.get('benchmark') || 'BENCHMARK1'
+    const mode = searchParams.get('mode') || 'portfolio' // 'portfolio' or 'universe'
+    const page = parseInt(searchParams.get('page') || '1')
+    const pageSize = parseInt(searchParams.get('pageSize') || '50')
     
-    console.log(`=== Scoring API: Starting calculation for profile ${profile}, benchmark ${benchmarkColumn} ===`)
+    console.log(`=== Scoring API: Starting calculation for profile ${profile}, benchmark ${benchmarkColumn}, mode ${mode} ===`)
     
     const supabase = createServiceRoleClient()
     
-    console.log('Step 1: Fetching holdings...')
-    const { data: holdingsDateData } = await supabase
-      .from('holdings')
-      .select('date')
-      .order('date', { ascending: false })
-      .limit(1)
+    let tickers: string[] = []
+    let uniqueHoldings = new Map<string, HoldingData>()
+    let latestDate: string | null = null
+    let universeTotalCount = 0
+    let universeTotalPages = 0
     
-    if (!holdingsDateData || holdingsDateData.length === 0) {
-      return NextResponse.json({
-        success: false,
-        message: 'No holdings data available'
-      }, { status: 404 })
-    }
-    
-    const latestDate = holdingsDateData[0].date
-    
-    const { data: holdings, error: holdingsError } = await supabase
-      .from('holdings')
-      .select('stock_ticker, shares, market_value')
-      .eq('date', latestDate)
-    
-    if (holdingsError || !holdings || holdings.length === 0) {
-      throw new Error('Failed to fetch holdings')
-    }
-    
-    // Deduplicate holdings
-    const uniqueHoldings = new Map<string, HoldingData>()
-    holdings.forEach((h: HoldingData) => {
-      if (!uniqueHoldings.has(h.stock_ticker)) {
-        uniqueHoldings.set(h.stock_ticker, h)
+    if (mode === 'universe') {
+      console.log('Step 1: Fetching universe data (paginated)...')
+      
+      // Get total count for pagination
+      const { count: totalCount } = await supabase
+        .from('factset_data_v2')
+        .select('*', { count: 'exact', head: true })
+      
+      universeTotalCount = totalCount || 0
+      universeTotalPages = Math.ceil(universeTotalCount / pageSize)
+      console.log(`Total universe tickers: ${universeTotalCount}, Total pages: ${universeTotalPages}`)
+      
+      // Fetch paginated data
+      const offset = (page - 1) * pageSize
+      const { data: universeData, error: universeError } = await supabase
+        .from('factset_data_v2')
+        .select('Ticker')
+        .range(offset, offset + pageSize - 1)
+        .order('Ticker', { ascending: true })
+      
+      if (universeError || !universeData || universeData.length === 0) {
+        throw new Error('Failed to fetch universe data')
       }
-    })
+      
+      tickers = universeData.map((row: any) => row.Ticker)
+      console.log(`Loaded ${tickers.length} tickers for page ${page}`)
+      
+    } else {
+      console.log('Step 1: Fetching holdings...')
+      const { data: holdingsDateData } = await supabase
+        .from('holdings')
+        .select('date')
+        .order('date', { ascending: false })
+        .limit(1)
+      
+      if (!holdingsDateData || holdingsDateData.length === 0) {
+        return NextResponse.json({
+          success: false,
+          message: 'No holdings data available'
+        }, { status: 404 })
+      }
+      
+      latestDate = holdingsDateData[0].date
+      
+      const { data: holdings, error: holdingsError } = await supabase
+        .from('holdings')
+        .select('stock_ticker, shares, market_value')
+        .eq('date', latestDate)
+      
+      if (holdingsError || !holdings || holdings.length === 0) {
+        throw new Error('Failed to fetch holdings')
+      }
+      
+      // Deduplicate holdings
+      holdings.forEach((h: HoldingData) => {
+        if (!uniqueHoldings.has(h.stock_ticker)) {
+          uniqueHoldings.set(h.stock_ticker, h)
+        }
+      })
+      
+      const holdingsArray = Array.from(uniqueHoldings.values())
+      tickers = holdingsArray.map(h => h.stock_ticker)
+      
+      console.log(`Loaded ${holdingsArray.length} unique holdings`)
+    }
     
-    const holdingsArray = Array.from(uniqueHoldings.values())
-    const tickers = holdingsArray.map(h => h.stock_ticker)
+    // FIX #2: Parallelize independent database queries for faster loading
+    console.log('Step 2-4: Fetching data in parallel (FactSet, Weightings, GICS, Score Weightings)...')
     
-    console.log(`Loaded ${holdingsArray.length} unique holdings`)
+    const [
+      factsetResult,
+      weightingsResult,
+      gicsBenchmarkResult,
+      scoreWeightingsResult
+    ] = await Promise.all([
+      // FactSet data for holdings
+      supabase
+        .from('factset_data_v2')
+        .select(`
+          "Ticker",
+          "EPS EST NTM",
+          "EPS EST NTM - 30 days ago",
+          "EPS EST NTM - 90 days ago",
+          "EPS surprise last qtr",
+          "Sales LTM",
+          "Sales EST NTM",
+          "SALES EST NTM - 30 days ago",
+          "SALES EST NTM - 90 days ago",
+          "SALES surprise last qtr",
+          "EBITDA LTM",
+          "PRICE",
+          "Gross Profit LTM",
+          "ROIC 1 YR",
+          "ROIC  3YR",
+          "acrcrurals %",
+          "FCF",
+          "Consensus Price Target",
+          "Total assets",
+          "2 month vol",
+          "3 yr beta",
+          "ND",
+          "EV/EBITDA - NTM",
+          "EV/Sales - NTM",
+          "P/E NTM",
+          "52 week high"
+        `)
+        .in('Ticker', tickers),
+      
+      // Weightings from API
+      fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/weightings`)
+        .then(res => res.json())
+        .catch(error => {
+          console.warn('Error fetching weightings:', error)
+          return { success: false, data: [] }
+        }),
+      
+      // GICS benchmark data
+      supabase
+        .from('gics_yahoo_finance')
+        .select('"Ticker", "BENCHMARK1", "BENCHMARK2", "BENCHMARK3", "BENCHMARK_CUSTOM"')
+        .in('"Ticker"', tickers),
+      
+      // Score weightings
+      supabase
+        .from('score_weightings')
+        .select('profile_name, category, metric_name, metric_weight, category_weight')
+        .eq('profile_name', profile)
+    ])
     
-    console.log('Step 2: Fetching FactSet data...')
-    const { data: factsetData, error: factsetError } = await supabase
-      .from('factset_data_v2')
-      .select(`
-        "Ticker",
-        "EPS EST NTM",
-        "EPS EST NTM - 30 days ago",
-        "EPS EST NTM - 90 days ago",
-        "EPS surprise last qtr",
-        "Sales LTM",
-        "Sales EST NTM",
-        "SALES EST NTM - 30 days ago",
-        "SALES EST NTM - 90 days ago",
-        "SALES surprise last qtr",
-        "EBITDA LTM",
-        "PRICE",
-        "Gross Profit LTM",
-        "ROIC 1 YR",
-        "ROIC  3YR",
-        "acrcrurals %",
-        "FCF",
-        "Consensus Price Target",
-        "Total assets",
-        "2 month vol",
-        "3 yr beta",
-        "ND",
-        "EV/EBITDA - NTM",
-        "EV/Sales - NTM",
-        "P/E NTM",
-        "52 week high"
-      `)
-      .in('Ticker', tickers)
-    
+    // Process FactSet data
+    const { data: factsetData, error: factsetError } = factsetResult
     if (factsetError) {
       console.error('FactSet fetch error:', factsetError)
     }
@@ -192,28 +324,17 @@ export async function GET(request: Request) {
     factsetData?.forEach((row: any) => {
       factsetMap.set(row.Ticker.toUpperCase(), row as FactSetData)
     })
+    console.log(`✅ Loaded FactSet data for ${factsetMap.size} tickers`)
     
-    console.log(`Loaded FactSet data for ${factsetMap.size} tickers`)
-    
-    console.log('Step 3: Fetching benchmark weightings from weightings_universe...')
+    // Process Weightings data
     let weightingsData: any[] = []
-    try {
-      const weightingsResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/api/weightings`)
-      const weightingsResult = await weightingsResponse.json()
-      
-      if (weightingsResult.success && weightingsResult.data) {
-        weightingsData = weightingsResult.data
-        console.log(`Fetched ${weightingsData.length} weightings from weightings_universe`)
-      } else {
-        console.warn('Failed to fetch weightings from API:', weightingsResult.message)
-      }
-    } catch (error) {
-      console.warn('Error fetching weightings:', error)
+    if (weightingsResult.success && weightingsResult.data) {
+      weightingsData = weightingsResult.data
+      console.log(`✅ Loaded ${weightingsData.length} weightings from weightings_universe`)
     }
     
     const weightingsMap = new Map<string, BenchmarkWeighting>()
     weightingsData.forEach((w: any) => {
-      // Map to BenchmarkWeighting structure (ticker, spy, qqq)
       weightingsMap.set(w.ticker.toUpperCase(), {
         ticker: w.ticker,
         spy: w.spy,
@@ -221,21 +342,27 @@ export async function GET(request: Request) {
       })
     })
     
-    // 3b. Fetch GICS benchmark data
-    console.log('Step 3b: Fetching GICS benchmark data...')
-    const { data: gicsBenchmarkData } = await supabase
-      .from('gics_yahoo_finance')
-      .select('"Ticker", "BENCHMARK1", "BENCHMARK2", "BENCHMARK3", "BENCHMARK_CUSTOM"')
-      .in('"Ticker"', tickers)
-    
+    // Process GICS benchmark data
+    const { data: gicsBenchmarkData } = gicsBenchmarkResult
     const gicsBenchmarkMap = new Map<string, GicsBenchmarkData>()
     gicsBenchmarkData?.forEach((g: GicsBenchmarkData) => {
       gicsBenchmarkMap.set(g.Ticker.toUpperCase(), g)
     })
+    console.log(`✅ Loaded GICS benchmark data for ${gicsBenchmarkMap.size} tickers`)
     
-    console.log(`Loaded GICS benchmark data for ${gicsBenchmarkMap.size} tickers`)
+    // Process Score weightings
+    const { data: scoreWeightingsData, error: scoreWeightingsError } = scoreWeightingsResult
+    if (scoreWeightingsError || !scoreWeightingsData || scoreWeightingsData.length === 0) {
+      throw new Error(`Failed to fetch score weightings for profile ${profile}`)
+    }
     
-    // 3c. Get unique benchmark tickers and fetch their FactSet data
+    const { weights, categoryWeights } = parseScoreWeightings(
+      scoreWeightingsData as ScoreWeights[],
+      profile
+    )
+    console.log(`✅ Loaded weightings for profile ${profile}`)
+    
+    // Step 3c: Get unique benchmark tickers and fetch their FactSet data
     console.log('Step 3c: Fetching benchmark ETF data...')
     const uniqueBenchmarks = new Set<string>()
     gicsBenchmarkData?.forEach((g: GicsBenchmarkData) => {
@@ -247,10 +374,9 @@ export async function GET(request: Request) {
     
     const benchmarkTickers = Array.from(uniqueBenchmarks)
       .filter(t => t && t.trim() !== '')
-      .map(t => t.toUpperCase()) // Convert to uppercase for FactSet query
+      .map(t => t.toUpperCase())
     console.log(`Found ${benchmarkTickers.length} unique benchmark tickers:`, benchmarkTickers)
     
-    // Fetch FactSet data for benchmarks
     const { data: benchmarkFactsetData } = await supabase
       .from('factset_data_v2')
       .select(`
@@ -278,68 +404,69 @@ export async function GET(request: Request) {
     benchmarkFactsetData?.forEach((row: any) => {
       benchmarkFactsetMap.set(row.Ticker.toUpperCase(), row)
     })
+    console.log(`✅ Loaded benchmark FactSet data for ${benchmarkFactsetMap.size} ETFs`)
     
-    console.log(`Loaded benchmark FactSet data for ${benchmarkFactsetMap.size} ETFs`)
+    console.log('Step 5: Determining which tickers need Yahoo Finance historical prices...')
     
-    console.log('Step 4: Fetching score weightings...')
-    const { data: scoreWeightingsData, error: scoreWeightingsError } = await supabase
-      .from('score_weightings')
-      .select('profile_name, category, metric_name, metric_weight, category_weight')
-      .eq('profile_name', profile)
+    // FIX #1: Only fetch Yahoo data for tickers we actually need
+    // Collect holdings + benchmark ETFs (with validation)
+    const allTickersForYahoo = new Set<string>()
     
-    if (scoreWeightingsError || !scoreWeightingsData || scoreWeightingsData.length === 0) {
-      throw new Error(`Failed to fetch score weightings for profile ${profile}`)
-    }
+    // Add validated holdings tickers
+    tickers.forEach(ticker => {
+      const validated = validateAndNormalizeTicker(ticker)
+      if (validated) allTickersForYahoo.add(validated)
+    })
     
-    const { weights, categoryWeights } = parseScoreWeightings(
-      scoreWeightingsData as ScoreWeights[],
-      profile
-    )
+    // Add validated benchmark tickers
+    benchmarkTickers.forEach(ticker => {
+      const validated = validateAndNormalizeTicker(ticker)
+      if (validated) allTickersForYahoo.add(validated)
+    })
     
-    console.log(`Loaded weightings for profile ${profile}`)
-    console.log('Category weights:', Object.fromEntries(categoryWeights))
-    console.log('QUALITY metric weights:', Object.fromEntries(weights.get('QUALITY')?.metricWeights || []))
+    const initialCount = allTickersForYahoo.size
     
-    console.log('Step 5: Fetching historical prices from Yahoo Finance...')
+    // Get unique benchmarks from GICS data to fetch their constituents
+    const uniqueGicsBenchmarks = new Set<string>()
+    gicsBenchmarkData?.forEach((g: GicsBenchmarkData) => {
+      const b1 = validateAndNormalizeTicker(g.BENCHMARK1)
+      const b2 = validateAndNormalizeTicker(g.BENCHMARK2)
+      const b3 = validateAndNormalizeTicker(g.BENCHMARK3)
+      const bc = validateAndNormalizeTicker(g.BENCHMARK_CUSTOM)
+      
+      if (b1) uniqueGicsBenchmarks.add(b1)
+      if (b2) uniqueGicsBenchmarks.add(b2)
+      if (b3) uniqueGicsBenchmarks.add(b3)
+      if (bc) uniqueGicsBenchmarks.add(bc)
+    })
     
-    // Collect all unique tickers we'll need historical prices for
-    const allTickersForYahoo = new Set<string>([
-      ...tickers,  // Holdings
-      ...benchmarkTickers  // Benchmark ETFs
-    ])
+    console.log(`Step 5a: Fetching constituents for ${uniqueGicsBenchmarks.size} benchmarks...`)
     
-    // Add all tickers from weightings_universe (for constituent-based scoring)
-    console.log('Step 5a: Fetching all tickers from weightings_universe for historical prices...')
-    const { data: allWeightingsTickers } = await supabase
-      .from('weightings_universe')
-      .select('"Ticker"')
-      .limit(5000)
-    
-    if (allWeightingsTickers) {
-      allWeightingsTickers.forEach((row: any) => {
-        if (row.Ticker) {
-          allTickersForYahoo.add(row.Ticker)
-        }
+    // Fetch constituent tickers for each benchmark (lightweight - just ticker lists)
+    for (const benchmarkTicker of uniqueGicsBenchmarks) {
+      const constituentTickers = await fetchBenchmarkConstituents(supabase, benchmarkTicker)
+      constituentTickers.forEach(ticker => {
+        const validated = validateAndNormalizeTicker(ticker)
+        if (validated) allTickersForYahoo.add(validated)
       })
     }
     
-    console.log(`Fetching historical prices for ${allTickersForYahoo.size} tickers (holdings + benchmarks + weightings_universe)`)
+    console.log(`📊 Optimized ticker fetch: ${allTickersForYahoo.size} tickers (holdings + benchmarks + constituents only)`)
+    console.log(`   Previously would have fetched ~1,500 tickers from weightings_universe`)
     
-    // Use batched fetching to avoid overwhelming the system and Yahoo Finance API
-    // Batch size: 10 tickers at a time, 500ms delay between batches for better rate limiting
-    const historicalPricesMap = await fetchHistoricalPricesInBatches(
-      Array.from(allTickersForYahoo),
-      10,  // batch size (reduced from 15)
-      500  // delay in ms (increased from 200ms)
+    // FIX #4: Use cached Yahoo Finance data (24hr TTL) for massive speed improvement
+    console.log('Step 5b: Fetching Yahoo Finance data with caching...')
+    const historicalPricesMap = await fetchHistoricalPricesWithCache(
+      Array.from(allTickersForYahoo)
     )
     
     console.log('Step 6: Extracting individual metrics...')
-    const holdingsWithMetrics = holdingsArray
-      .map(holding => {
-        const ticker = holding.stock_ticker.toUpperCase()
-        const factset = factsetMap.get(ticker)
-        const yahoo = historicalPricesMap.get(ticker)
-        const gicsBenchmark = gicsBenchmarkMap.get(ticker)
+    const tickersWithMetrics = tickers
+      .map(ticker => {
+        const tickerUpper = ticker.toUpperCase()
+        const factset = factsetMap.get(tickerUpper)
+        const yahoo = historicalPricesMap.get(tickerUpper)
+        const gicsBenchmark = gicsBenchmarkMap.get(tickerUpper)
         
         if (!factset || !yahoo) {
           console.warn(`Missing data for ${ticker}`)
@@ -349,7 +476,7 @@ export async function GET(request: Request) {
         const metrics = extractIndividualMetrics(factset, yahoo)
         
         return {
-          ticker: holding.stock_ticker,
+          ticker: ticker,
           metrics,
           gicsBenchmark
         }
@@ -360,7 +487,7 @@ export async function GET(request: Request) {
         gicsBenchmark: GicsBenchmarkData | undefined
       }>
     
-    console.log(`Extracted metrics for ${holdingsWithMetrics.length} holdings`)
+    console.log(`Extracted metrics for ${tickersWithMetrics.length} tickers`)
     
     console.log('Step 7: Fetching universe data for percentile calculations...')
     
@@ -447,23 +574,23 @@ export async function GET(request: Request) {
     
     // 7b. Calculate QUALITY scores using universe-wide percentile ranking
     console.log('Step 7b: Calculating QUALITY percentile scores across universe...')
-    const qualityPercentileScores = holdingsWithMetrics.map(holding => ({
-      roicTTMScore: calculatePercentileRank(holding.metrics.roicTTM, universeRoicTTMs, false),
-      grossProfitabilityScore: calculatePercentileRank(holding.metrics.grossProfitability, universeGrossProfitabilities, false),
-      accrualsScore: calculatePercentileRank(holding.metrics.accruals, universeAccruals, true), // Lower is better
-      fcfToAssetsScore: calculatePercentileRank(holding.metrics.fcfToAssets, universeFcfToAssets, false),
-      roic3YrScore: calculatePercentileRank(holding.metrics.roic3Yr, universeRoic3Yrs, false),
-      ebitdaMarginScore: calculatePercentileRank(holding.metrics.ebitdaMargin, universeEbitdaMargins, false)
+    const qualityPercentileScores = tickersWithMetrics.map(ticker => ({
+      roicTTMScore: calculatePercentileRank(ticker.metrics.roicTTM, universeRoicTTMs, false),
+      grossProfitabilityScore: calculatePercentileRank(ticker.metrics.grossProfitability, universeGrossProfitabilities, false),
+      accrualsScore: calculatePercentileRank(ticker.metrics.accruals, universeAccruals, true), // Lower is better
+      fcfToAssetsScore: calculatePercentileRank(ticker.metrics.fcfToAssets, universeFcfToAssets, false),
+      roic3YrScore: calculatePercentileRank(ticker.metrics.roic3Yr, universeRoic3Yrs, false),
+      ebitdaMarginScore: calculatePercentileRank(ticker.metrics.ebitdaMargin, universeEbitdaMargins, false)
     }))
     
     // 7c. Calculate percentile scores for stock-specific metrics (using universe)
     console.log('Step 7c: Calculating stock-specific percentile scores across universe...')
-    const stockSpecificScores = holdingsWithMetrics.map(holding => ({
-      targetPriceUpsideScore: calculatePercentileRank(holding.metrics.targetPriceUpside, universeTargetPrices, false),
-      epsSurpriseScore: calculatePercentileRank(holding.metrics.epsSurprise, universeEpsSurprises, false),
-      revSurpriseScore: calculatePercentileRank(holding.metrics.revSurprise, universeRevSurprises, false),
-      ntmEpsChangeScore: calculatePercentileRank(holding.metrics.ntmEpsChange, universeNtmEpsChanges, false),
-      ntmRevChangeScore: calculatePercentileRank(holding.metrics.ntmRevChange, universeNtmRevChanges, false)
+    const stockSpecificScores = tickersWithMetrics.map(ticker => ({
+      targetPriceUpsideScore: calculatePercentileRank(ticker.metrics.targetPriceUpside, universeTargetPrices, false),
+      epsSurpriseScore: calculatePercentileRank(ticker.metrics.epsSurprise, universeEpsSurprises, false),
+      revSurpriseScore: calculatePercentileRank(ticker.metrics.revSurprise, universeRevSurprises, false),
+      ntmEpsChangeScore: calculatePercentileRank(ticker.metrics.ntmEpsChange, universeNtmEpsChanges, false),
+      ntmRevChangeScore: calculatePercentileRank(ticker.metrics.ntmRevChange, universeNtmRevChanges, false)
     }))
     
     console.log(`Step 8: Calculating benchmark constituent-based scores using ${benchmarkColumn}...`)
@@ -471,10 +598,10 @@ export async function GET(request: Request) {
     // Build a map of benchmark ticker -> constituent metrics
     const benchmarkConstituentsCache = new Map<string, IndividualMetrics[]>()
     
-    // Get unique benchmark tickers from holdings
-    const uniqueHoldingBenchmarks = new Set<string>()
-    holdingsWithMetrics.forEach(holding => {
-      const gicsBenchmark = holding.gicsBenchmark
+    // Get unique benchmark tickers from tickers
+    const uniqueTickerBenchmarks = new Set<string>()
+    tickersWithMetrics.forEach(ticker => {
+      const gicsBenchmark = ticker.gicsBenchmark
       if (gicsBenchmark) {
         let benchmarkTicker: string | null = null
         switch (benchmarkColumn) {
@@ -492,15 +619,15 @@ export async function GET(request: Request) {
             break
         }
         if (benchmarkTicker) {
-          uniqueHoldingBenchmarks.add(benchmarkTicker.toUpperCase())
+          uniqueTickerBenchmarks.add(benchmarkTicker.toUpperCase())
         }
       }
     })
     
-    console.log(`Found ${uniqueHoldingBenchmarks.size} unique benchmarks in holdings:`, Array.from(uniqueHoldingBenchmarks))
+    console.log(`Found ${uniqueTickerBenchmarks.size} unique benchmarks in tickers:`, Array.from(uniqueTickerBenchmarks))
     
     // Fetch constituents for each unique benchmark
-    for (const benchmarkTicker of uniqueHoldingBenchmarks) {
+    for (const benchmarkTicker of uniqueTickerBenchmarks) {
       console.log(`\n📊 Fetching constituents for benchmark: ${benchmarkTicker}`)
       const constituentTickers = await fetchBenchmarkConstituents(supabase, benchmarkTicker)
       
@@ -538,19 +665,15 @@ export async function GET(request: Request) {
           `)
           .in('Ticker', constituentTickers)
         
-        // Extract metrics for each constituent
+        // Extract metrics for each constituent (ONLY those with real Yahoo data)
         const constituentMetrics: IndividualMetrics[] = []
-        const dummyYahoo = { 
-          currentPrice: 0, 
-          price30DaysAgo: null, 
-          price90DaysAgo: null, 
-          price365DaysAgo: null, 
-          maxDrawdown: null 
-        }
         
         constituentFactsetData?.forEach((factset: any) => {
-          const yahoo = historicalPricesMap.get(factset.Ticker.toUpperCase()) || dummyYahoo
-          constituentMetrics.push(extractIndividualMetrics(factset as FactSetData, yahoo))
+          const yahoo = historicalPricesMap.get(factset.Ticker.toUpperCase())
+          if (yahoo) {
+            // Only include constituents with real Yahoo Finance data for accurate comparisons
+            constituentMetrics.push(extractIndividualMetrics(factset as FactSetData, yahoo))
+          }
         })
         
         benchmarkConstituentsCache.set(benchmarkTicker, constituentMetrics)
@@ -561,8 +684,8 @@ export async function GET(request: Request) {
       }
     }
     
-    const finalScores: StockScore[] = holdingsWithMetrics.map((holding, index) => {
-      const gicsBenchmark = holding.gicsBenchmark
+    const finalScores: StockScore[] = tickersWithMetrics.map((ticker, index) => {
+      const gicsBenchmark = ticker.gicsBenchmark
       
       // Get benchmark ticker based on selected benchmark column
       let benchmarkTicker: string | null = null
@@ -590,11 +713,11 @@ export async function GET(request: Request) {
         
         if (constituentMetrics && constituentMetrics.length >= 10) {
           // Use constituent-based percentile ranking
-          benchmarkRelativeScores = calculateBenchmarkConstituentScores(holding.metrics, constituentMetrics)
+          benchmarkRelativeScores = calculateBenchmarkConstituentScores(ticker.metrics, constituentMetrics)
           
-          // Log first holding for verification
+          // Log first ticker for verification
           if (index === 0) {
-            console.log(`\n🎯 SCORING METHOD VERIFICATION (First Holding: ${holding.ticker})`)
+            console.log(`\n🎯 SCORING METHOD VERIFICATION (First Ticker: ${ticker.ticker})`)
             console.log(`   Benchmark: ${benchmarkTicker}`)
             console.log(`   Method: CONSTITUENT-BASED PERCENTILE RANKING`)
             console.log(`   Constituents used: ${constituentMetrics.length}`)
@@ -604,31 +727,37 @@ export async function GET(request: Request) {
             console.log(`     - Beta Score: ${benchmarkRelativeScores.beta3YrScore}`)
           }
         } else {
-          // Fall back to universe-wide percentile for VALUE, MOMENTUM, RISK
-          console.warn(`⚠️  No constituents found for ${benchmarkTicker}, using universe percentile for ${holding.ticker}`)
-          
+          // No valid benchmark constituents - return null for VALUE/MOMENTUM/RISK
+          console.warn(`⚠️  Benchmark ${benchmarkTicker} has insufficient constituents (<10), no scores for ${ticker.ticker}`)
           benchmarkRelativeScores = {
-            peRatioScore: calculatePercentileRank(holding.metrics.peRatio, universePeRatios, true),
-            evEbitdaScore: calculatePercentileRank(holding.metrics.evEbitda, universeEvEbitdas, true),
-            evSalesScore: calculatePercentileRank(holding.metrics.evSales, universeEvSales, true),
-            targetPriceUpsideScore: calculatePercentileRank(holding.metrics.targetPriceUpside, universeTargetPrices, false),
-            return12MEx1MScore: calculatePercentileRank(holding.metrics.return12MEx1M, universeReturn12MEx1Ms, false),
-            return3MScore: calculatePercentileRank(holding.metrics.return3M, universeReturn3Ms, false),
-            pct52WeekHighScore: calculatePercentileRank(holding.metrics.pct52WeekHigh, universePct52WeekHighs, false),
-            beta3YrScore: calculatePercentileRank(holding.metrics.beta3Yr, universeBeta3Yrs, true),
-            volatility60DayScore: calculatePercentileRank(holding.metrics.volatility60Day, universeVolatility60Days, true),
-            maxDrawdownScore: calculatePercentileRank(holding.metrics.maxDrawdown, universeMaxDrawdowns, true)
-          }
-          
-          if (index === 0) {
-            console.log(`\n🎯 SCORING METHOD VERIFICATION (First Holding: ${holding.ticker})`)
-            console.log(`   Benchmark: ${benchmarkTicker}`)
-            console.log(`   Method: UNIVERSE-WIDE PERCENTILE RANKING (FALLBACK)`)
-            console.log(`   Universe size: ${universeMetrics.length}`)
+            // All VALUE/MOMENTUM/RISK scores will be null
+            peRatioScore: null,
+            evEbitdaScore: null,
+            evSalesScore: null,
+            targetPriceUpsideScore: null,
+            return12MEx1MScore: null,
+            return3MScore: null,
+            pct52WeekHighScore: null,
+            beta3YrScore: null,
+            volatility60DayScore: null,
+            maxDrawdownScore: null
           }
         }
       } else {
-        console.warn(`⚠️  No benchmark ticker found for ${holding.ticker} in ${benchmarkColumn}`)
+        // No benchmark assigned - return null for VALUE/MOMENTUM/RISK
+        console.warn(`⚠️  No benchmark ticker found for ${ticker.ticker} in ${benchmarkColumn}`)
+        benchmarkRelativeScores = {
+          peRatioScore: null,
+          evEbitdaScore: null,
+          evSalesScore: null,
+          targetPriceUpsideScore: null,
+          return12MEx1MScore: null,
+          return3MScore: null,
+          pct52WeekHighScore: null,
+          beta3YrScore: null,
+          volatility60DayScore: null,
+          maxDrawdownScore: null
+        }
       }
       
       // Combine benchmark-relative scores with QUALITY percentile scores
@@ -645,30 +774,31 @@ export async function GET(request: Request) {
       
       const stockSpecific = stockSpecificScores[index]
       
-      // BUG FIX #5: Use benchmark scores with fallback to universe scores
+      // Use benchmark scores for VALUE/MOMENTUM/RISK, universe percentile for QUALITY
       const scored = {
-        ...holding.metrics,
-        // VALUE from benchmark-relative
+        ...ticker.metrics,
+        // VALUE from benchmark (null if no benchmark)
         peRatioScore: benchmarkRelativeScores.peRatioScore ?? null,
         evEbitdaScore: benchmarkRelativeScores.evEbitdaScore ?? null,
         evSalesScore: benchmarkRelativeScores.evSalesScore ?? null,
-        targetPriceUpsideScore: benchmarkRelativeScores.targetPriceUpsideScore ?? stockSpecific.targetPriceUpsideScore,
-        // MOMENTUM from benchmark-relative with fallback to universe
+        targetPriceUpsideScore: benchmarkRelativeScores.targetPriceUpsideScore ?? null,
+        // MOMENTUM from benchmark (null if no benchmark)
         return12MEx1MScore: benchmarkRelativeScores.return12MEx1MScore ?? null,
         return3MScore: benchmarkRelativeScores.return3MScore ?? null,
         pct52WeekHighScore: benchmarkRelativeScores.pct52WeekHighScore ?? null,
-        epsSurpriseScore: benchmarkRelativeScores.epsSurpriseScore ?? stockSpecific.epsSurpriseScore,
-        revSurpriseScore: benchmarkRelativeScores.revSurpriseScore ?? stockSpecific.revSurpriseScore,
-        ntmEpsChangeScore: benchmarkRelativeScores.ntmEpsChangeScore ?? stockSpecific.ntmEpsChangeScore,
-        ntmRevChangeScore: benchmarkRelativeScores.ntmRevChangeScore ?? stockSpecific.ntmRevChangeScore,
-        // QUALITY from benchmark-relative with fallback to universe
+        // Stock-specific MOMENTUM metrics from universe percentile (always available)
+        epsSurpriseScore: stockSpecific.epsSurpriseScore,
+        revSurpriseScore: stockSpecific.revSurpriseScore,
+        ntmEpsChangeScore: stockSpecific.ntmEpsChangeScore,
+        ntmRevChangeScore: stockSpecific.ntmRevChangeScore,
+        // QUALITY from benchmark if available, else universe percentile (always available)
         roicTTMScore: benchmarkRelativeScores.roicTTMScore ?? qualityScores.roicTTMScore,
         grossProfitabilityScore: benchmarkRelativeScores.grossProfitabilityScore ?? qualityScores.grossProfitabilityScore,
         accrualsScore: benchmarkRelativeScores.accrualsScore ?? qualityScores.accrualsScore,
         fcfToAssetsScore: benchmarkRelativeScores.fcfToAssetsScore ?? qualityScores.fcfToAssetsScore,
         roic3YrScore: benchmarkRelativeScores.roic3YrScore ?? qualityScores.roic3YrScore,
         ebitdaMarginScore: benchmarkRelativeScores.ebitdaMarginScore ?? qualityScores.ebitdaMarginScore,
-        // RISK from benchmark-relative
+        // RISK from benchmark (null if no benchmark)
         beta3YrScore: benchmarkRelativeScores.beta3YrScore ?? null,
         volatility60DayScore: benchmarkRelativeScores.volatility60DayScore ?? null,
         maxDrawdownScore: benchmarkRelativeScores.maxDrawdownScore ?? null,
@@ -695,7 +825,7 @@ export async function GET(request: Request) {
       }
       
       return {
-        ticker: holding.ticker,
+        ticker: ticker.ticker,
         ...scored,
         ...composites,
         ...total
@@ -730,16 +860,30 @@ export async function GET(request: Request) {
     
     console.log(`=== Scoring API: Completed successfully ===`)
     
-    return NextResponse.json({
-      success: true,
-      profile,
-      data: enrichedScores,
-      metadata: {
-        holdingsCount: enrichedScores.length,
-        holdingsDate: latestDate,
-        calculatedAt: new Date().toISOString()
-      }
-    })
+    // Return format depends on mode
+    if (mode === 'universe') {
+      return NextResponse.json({
+        success: true,
+        scores: enrichedScores,
+        pagination: {
+          page,
+          pageSize,
+          totalCount: universeTotalCount,
+          totalPages: universeTotalPages
+        }
+      })
+    } else {
+      return NextResponse.json({
+        success: true,
+        profile,
+        data: enrichedScores,
+        metadata: {
+          holdingsCount: enrichedScores.length,
+          holdingsDate: latestDate,
+          calculatedAt: new Date().toISOString()
+        }
+      })
+    }
     
   } catch (error) {
     console.error('Scoring API error:', error)

@@ -88,7 +88,7 @@ interface ScoringResponse {
 
 export default function ScoringPage() {
   const [profile, setProfile] = useState<'BASE' | 'CAUTIOUS' | 'AGGRESSIVE'>('BASE')
-  const [benchmark, setBenchmark] = useState<'BENCHMARK1' | 'BENCHMARK2' | 'BENCHMARK3' | 'BENCHMARK_CUSTOM'>('BENCHMARK1')
+  const [benchmark, setBenchmark] = useState<'BENCHMARK1' | 'BENCHMARK2' | 'BENCHMARK3' | 'BENCHMARK_CUSTOM'>('BENCHMARK3')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [scores, setScores] = useState<StockScore[]>([])
@@ -143,11 +143,13 @@ export default function ScoringPage() {
       setUniverseError(null)
       
       const response = await fetch(
-        `/api/scoring/universe?profile=${profile}&benchmark=${benchmark}&page=${universePage}&pageSize=${universePageSize}`
+        `/api/scoring?mode=universe&profile=${profile}&benchmark=${benchmark}&page=${universePage}&pageSize=${universePageSize}`
       )
       
       if (!response.ok) {
-        throw new Error('Failed to fetch universe data')
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('Universe API error:', errorData)
+        throw new Error(errorData.message || errorData.error || `Failed to fetch universe data (${response.status})`)
       }
       
       const result = await response.json()
