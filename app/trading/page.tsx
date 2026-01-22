@@ -195,9 +195,9 @@ export default function TradingPage() {
             }
             
             // Calculate True Beta: max of betas after capping at 3
-            const capped_beta_1yr = Math.min(beta_1yr, 3)
-            const capped_beta_3yr = Math.min(beta_3yr, 3)
-            const capped_beta_5yr = Math.min(beta_5yr, 3)
+            const capped_beta_1yr = Math.min(beta_1yr ?? 1, 3)
+            const capped_beta_3yr = Math.min(beta_3yr ?? 1, 3)
+            const capped_beta_5yr = Math.min(beta_5yr ?? 1, 3)
             
             const stockMaxBeta = Math.max(capped_beta_1yr, capped_beta_3yr, capped_beta_5yr)
             
