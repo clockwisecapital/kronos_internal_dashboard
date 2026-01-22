@@ -62,8 +62,8 @@ interface StockScore {
   // RISK metrics
   beta3Yr: number | null
   beta3YrScore: number | null
-  volatility30Day: number | null
-  volatility30DayScore: number | null
+  volatility60Day: number | null
+  volatility60DayScore: number | null
   maxDrawdown: number | null
   maxDrawdownScore: number | null
   financialLeverage: number | null
@@ -414,7 +414,7 @@ export default function ScoringPage() {
                             compositeScore={stock.riskScore}
                             metrics={[
                               { name: 'Beta 3-Yr', value: stock.beta3Yr, score: stock.beta3YrScore, format: 'ratio', invertColor: true },
-                              { name: '30-Day Volatility', value: stock.volatility30Day, score: stock.volatility30DayScore, format: 'percentage', invertColor: true },
+                              { name: '60-Day Volatility', value: stock.volatility60Day, score: stock.volatility60DayScore, format: 'percentage', invertColor: true },
                               { name: 'Max Drawdown', value: stock.maxDrawdown, score: stock.maxDrawdownScore, format: 'percentage', invertColor: true },
                               { name: 'Financial Leverage', value: stock.financialLeverage, score: stock.financialLeverageScore, format: 'ratio', invertColor: true }
                             ]}
@@ -634,7 +634,7 @@ export default function ScoringPage() {
                               compositeScore={stock.riskScore}
                               metrics={[
                                 { name: 'Beta 3-Yr', value: stock.beta3Yr, score: stock.beta3YrScore, format: 'ratio', invertColor: true },
-                                { name: '30-Day Volatility', value: stock.volatility30Day, score: stock.volatility30DayScore, format: 'percentage', invertColor: true },
+                                { name: '60-Day Volatility', value: stock.volatility60Day, score: stock.volatility60DayScore, format: 'percentage', invertColor: true },
                                 { name: 'Max Drawdown', value: stock.maxDrawdown, score: stock.maxDrawdownScore, format: 'percentage', invertColor: true },
                                 { name: 'Financial Leverage', value: stock.financialLeverage, score: stock.financialLeverageScore, format: 'ratio', invertColor: true }
                               ]}

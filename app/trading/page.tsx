@@ -16,6 +16,12 @@ interface BetaData {
   beta_5yr: number | null
 }
 
+interface WeightingData {
+  ticker: string
+  qqq: number | null
+  spy: number | null
+}
+
 interface Trade {
   id: string
   ticker: string
@@ -46,6 +52,7 @@ export default function TradingPage() {
   const [nav, setNav] = useState(0)
   const [holdings, setHoldings] = useState<HoldingData[]>([])
   const [betaData, setBetaData] = useState<BetaData[]>([])
+  const [weightingsData, setWeightingsData] = useState<WeightingData[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
   const priceDebounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary>({
@@ -114,6 +121,24 @@ export default function TradingPage() {
         console.error('Trading: No holdings data available')
       }
 
+      // Fetch weightings data (for QQQ membership check)
+      const weightingsRes = await fetch('/api/weightings')
+      const weightingsData = await weightingsRes.json()
+      console.log('Trading: Weightings response:', weightingsData)
+      
+      let weightingsArray: WeightingData[] = []
+      if (weightingsData.success && weightingsData.data && weightingsData.data.length > 0) {
+        weightingsArray = weightingsData.data.map((w: any) => ({
+          ticker: w.ticker.toUpperCase(),
+          spy: w.spy !== null && w.spy !== undefined ? w.spy : null,
+          qqq: w.qqq !== null && w.qqq !== undefined ? w.qqq : null
+        }))
+        setWeightingsData(weightingsArray)
+        console.log(`Trading: Loaded ${weightingsArray.length} weightings`)
+      } else {
+        console.error('Trading: No weightings data available')
+      }
+
       // Fetch FactSet data for beta values (1yr, 3yr, 5yr)
       const factsetRes = await fetch('/api/factset')
       const factsetData = await factsetRes.json()
@@ -121,23 +146,117 @@ export default function TradingPage() {
       
       if (factsetData.success && factsetData.data && factsetData.data.length > 0) {
         // Map factset data to beta data structure
-        const betaDataArray: BetaData[] = factsetData.data.map((f: any) => {
+        const betaDataArrayRaw = factsetData.data.map((f: any) => {
           const ticker = (f.Ticker || f.TICKER || '').trim().toUpperCase()
           return {
             ticker,
-            true_beta: null, // Not available in factset, would come from universe if needed
             beta_1yr: f['1 yr Beta'] ? parseFloat(f['1 yr Beta']) : null,
             beta_3yr: f['3 yr beta'] ? parseFloat(f['3 yr beta']) : null,
             beta_5yr: f['5 yr beta - monthly'] ? parseFloat(f['5 yr beta - monthly']) : null
           }
-        }).filter((b: BetaData) => b.ticker) // Remove entries without ticker
+        }).filter((b: any) => b.ticker) // Remove entries without ticker
+        
+        // Calculate true_beta using same logic as holdings page
+        const betaDataArray: BetaData[] = betaDataArrayRaw.map((b: any) => {
+          const ticker = b.ticker
+          const isCash = ticker.includes('CASH') || ticker === 'FGXXX' || ticker === 'SPAXX' || ticker === 'VMFXX'
+          
+          let beta_1yr: number | null = null
+          let beta_3yr: number | null = null
+          let beta_5yr: number | null = null
+          let true_beta: number | null = null
+          
+          if (isCash) {
+            // Cash always has beta of 0
+            beta_1yr = 0
+            beta_3yr = 0
+            beta_5yr = 0
+            true_beta = 0
+          } else {
+            // Get raw beta values
+            const raw_beta_1yr = b.beta_1yr
+            const raw_beta_3yr = b.beta_3yr
+            const raw_beta_5yr = b.beta_5yr
+            
+            // Apply fallback logic: default to 1 if null
+            beta_1yr = raw_beta_1yr ?? 1
+            beta_3yr = raw_beta_3yr ?? 1
+            beta_5yr = raw_beta_5yr ?? 1
+            
+            // Apply shorter-to-longer fallback
+            if (raw_beta_1yr != null && raw_beta_3yr == null) {
+              beta_3yr = raw_beta_1yr
+            }
+            if (raw_beta_3yr != null && raw_beta_5yr == null) {
+              beta_5yr = raw_beta_3yr
+            }
+            if (raw_beta_1yr != null && raw_beta_5yr == null && raw_beta_3yr == null) {
+              beta_5yr = raw_beta_1yr
+            }
+            
+            // Calculate True Beta: max of betas after capping at 3
+            const capped_beta_1yr = Math.min(beta_1yr, 3)
+            const capped_beta_3yr = Math.min(beta_3yr, 3)
+            const capped_beta_5yr = Math.min(beta_5yr, 3)
+            
+            const stockMaxBeta = Math.max(capped_beta_1yr, capped_beta_3yr, capped_beta_5yr)
+            
+            // Check if stock is in QQQ
+            const weighting = weightingsArray.find(w => w.ticker === ticker)
+            const isInQQQ = weighting?.qqq != null && weighting.qqq > 0
+            
+            if (isInQQQ) {
+              // Get QQQ's betas
+              const qqqBeta = betaDataArrayRaw.find((qb: any) => qb.ticker === 'QQQ')
+              if (qqqBeta) {
+                let qqq_beta_1yr = qqqBeta.beta_1yr ?? 1
+                let qqq_beta_3yr = qqqBeta.beta_3yr ?? 1
+                let qqq_beta_5yr = qqqBeta.beta_5yr ?? 1
+                
+                // Apply fallback for QQQ
+                if (qqqBeta.beta_1yr != null && qqqBeta.beta_3yr == null) {
+                  qqq_beta_3yr = qqqBeta.beta_1yr
+                }
+                if (qqqBeta.beta_3yr != null && qqqBeta.beta_5yr == null) {
+                  qqq_beta_5yr = qqqBeta.beta_3yr
+                }
+                if (qqqBeta.beta_1yr != null && qqqBeta.beta_5yr == null && qqqBeta.beta_3yr == null) {
+                  qqq_beta_5yr = qqqBeta.beta_1yr
+                }
+                
+                // Cap QQQ betas at 3
+                const capped_qqq_beta_1yr = Math.min(qqq_beta_1yr, 3)
+                const capped_qqq_beta_3yr = Math.min(qqq_beta_3yr, 3)
+                const capped_qqq_beta_5yr = Math.min(qqq_beta_5yr, 3)
+                
+                const qqqMaxBeta = Math.max(capped_qqq_beta_1yr, capped_qqq_beta_3yr, capped_qqq_beta_5yr)
+                
+                // True beta is the higher of stock's max or QQQ's max
+                true_beta = Math.max(stockMaxBeta, qqqMaxBeta)
+              } else {
+                true_beta = stockMaxBeta
+              }
+            } else {
+              // Not in QQQ, just use stock's max beta
+              true_beta = stockMaxBeta
+            }
+          }
+          
+          return {
+            ticker,
+            true_beta,
+            beta_1yr,
+            beta_3yr,
+            beta_5yr
+          }
+        })
         
         console.log(`Trading: Loaded ${betaDataArray.length} stocks with beta data from FactSet`)
         setBetaData(betaDataArray)
         
         // Log sample betas for debugging
         if (betaDataArray.length > 0) {
-          console.log('Trading: Sample beta data:', betaDataArray.slice(0, 3))
+          console.log('Trading: Sample beta data (with true_beta):', betaDataArray.slice(0, 5))
         }
       } else {
         console.error('Trading: No FactSet data available')
@@ -161,7 +280,13 @@ export default function TradingPage() {
     
     // Debug: Log first few holdings and beta data
     console.log('Trading: First 3 holdings:', holdings.slice(0, 3).map(h => ({ ticker: h.stock_ticker, weight: h.weight_pct })))
-    console.log('Trading: First 3 beta entries:', betaData.slice(0, 3).map(b => ({ ticker: b.ticker, beta_1yr: b.beta_1yr })))
+    console.log('Trading: First 3 beta entries:', betaData.slice(0, 3).map(b => ({ 
+      ticker: b.ticker, 
+      true_beta: b.true_beta, 
+      beta_1yr: b.beta_1yr, 
+      beta_3yr: b.beta_3yr, 
+      beta_5yr: b.beta_5yr 
+    })))
     
     // Current Cash: Sum of cash & equivalents + FGXXX as percentage
     const cashHoldings = holdings.filter(h => 
@@ -184,15 +309,27 @@ export default function TradingPage() {
 
     holdings.forEach(holding => {
       const betaEntry = betaData.find(b => b.ticker === holding.stock_ticker)
+      const weight = holding.weight_pct / 100
+      
       if (betaEntry) {
         matchedCount++
-        const weight = holding.weight_pct / 100
-        currentTrueBeta += (betaEntry.true_beta || 0) * weight
-        current1YrBeta += (betaEntry.beta_1yr || 0) * weight
-        current3YrBeta += (betaEntry.beta_3yr || 0) * weight
-        current5YrBeta += (betaEntry.beta_5yr || 0) * weight
+        // Use calculated betas (already have fallback logic applied)
+        currentTrueBeta += (betaEntry.true_beta ?? 1) * weight
+        current1YrBeta += (betaEntry.beta_1yr ?? 1) * weight
+        current3YrBeta += (betaEntry.beta_3yr ?? 1) * weight
+        current5YrBeta += (betaEntry.beta_5yr ?? 1) * weight
       } else {
         unmatchedTickers.push(holding.stock_ticker)
+        // For unmatched tickers, default to beta of 1 (unless it's cash)
+        const isCash = holding.stock_ticker.toUpperCase().includes('CASH') || 
+                       holding.stock_ticker === 'FGXXX' || 
+                       holding.stock_ticker === 'SPAXX' || 
+                       holding.stock_ticker === 'VMFXX'
+        const defaultBeta = isCash ? 0 : 1
+        currentTrueBeta += defaultBeta * weight
+        current1YrBeta += defaultBeta * weight
+        current3YrBeta += defaultBeta * weight
+        current5YrBeta += defaultBeta * weight
       }
     })
     
@@ -200,7 +337,7 @@ export default function TradingPage() {
     if (unmatchedTickers.length > 0) {
       console.log(`Trading: Unmatched tickers:`, unmatchedTickers.slice(0, 10))
     }
-    console.log(`Trading: Current betas - 1yr: ${current1YrBeta.toFixed(3)}, 3yr: ${current3YrBeta.toFixed(3)}, 5yr: ${current5YrBeta.toFixed(3)}`)
+    console.log(`Trading: Current betas - True: ${currentTrueBeta.toFixed(3)}, 1yr: ${current1YrBeta.toFixed(3)}, 3yr: ${current3YrBeta.toFixed(3)}, 5yr: ${current5YrBeta.toFixed(3)}`)
 
     // Target Cash: Current cash % + sum of % cash change from trades
     const totalCashChange = trades.reduce((sum, t) => sum + t.cashChange, 0)
@@ -226,12 +363,25 @@ export default function TradingPage() {
 
     targetWeights.forEach((weight, ticker) => {
       const betaEntry = betaData.find(b => b.ticker === ticker)
+      const weightDecimal = weight / 100
+      
       if (betaEntry) {
-        const weightDecimal = weight / 100
-        targetTrueBeta += (betaEntry.true_beta || 0) * weightDecimal
-        target1YrBeta += (betaEntry.beta_1yr || 0) * weightDecimal
-        target3YrBeta += (betaEntry.beta_3yr || 0) * weightDecimal
-        target5YrBeta += (betaEntry.beta_5yr || 0) * weightDecimal
+        // Use calculated betas (already have fallback logic applied)
+        targetTrueBeta += (betaEntry.true_beta ?? 1) * weightDecimal
+        target1YrBeta += (betaEntry.beta_1yr ?? 1) * weightDecimal
+        target3YrBeta += (betaEntry.beta_3yr ?? 1) * weightDecimal
+        target5YrBeta += (betaEntry.beta_5yr ?? 1) * weightDecimal
+      } else {
+        // For unmatched tickers, default to beta of 1 (unless it's cash)
+        const isCash = ticker.toUpperCase().includes('CASH') || 
+                       ticker === 'FGXXX' || 
+                       ticker === 'SPAXX' || 
+                       ticker === 'VMFXX'
+        const defaultBeta = isCash ? 0 : 1
+        targetTrueBeta += defaultBeta * weightDecimal
+        target1YrBeta += defaultBeta * weightDecimal
+        target3YrBeta += defaultBeta * weightDecimal
+        target5YrBeta += defaultBeta * weightDecimal
       }
     })
 

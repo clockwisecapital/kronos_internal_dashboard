@@ -307,7 +307,10 @@ export function extractIndividualMetrics(
     : null
   
   // QUALITY metrics
-  const roicTTM = parseNumber(factset['ROIC 1 YR'])
+  // BUG FIX: FactSet returns ROIC as percentages (e.g., 70.6 = 70.6%), so divide by 100
+  const roicTTM = parseNumber(factset['ROIC 1 YR']) !== null 
+    ? parseNumber(factset['ROIC 1 YR'])! / 100 
+    : null
   
   const grossProfit = parseNumber(factset['Gross Profit LTM'])
   const grossProfitability = grossProfit && totalAssets && totalAssets !== 0
@@ -321,7 +324,10 @@ export function extractIndividualMetrics(
     ? (fcf / totalAssets)
     : null
   
-  const roic3Yr = parseNumber(factset['ROIC  3YR'])
+  // BUG FIX: FactSet returns ROIC as percentages (e.g., 70.6 = 70.6%), so divide by 100
+  const roic3Yr = parseNumber(factset['ROIC  3YR']) !== null 
+    ? parseNumber(factset['ROIC  3YR'])! / 100 
+    : null
   
   const ebitda = parseNumber(factset['EBITDA LTM'])
   const sales = parseNumber(factset['Sales LTM'])
@@ -427,7 +433,7 @@ export function calculatePercentileScores(
     // RISK scores (lower risk is better)
     beta3YrScore: calculatePercentileRank(metrics.beta3Yr, beta3Yrs, true),
     volatility60DayScore: calculatePercentileRank(metrics.volatility60Day, volatility60Days, true),
-    maxDrawdownScore: calculatePercentileRank(metrics.maxDrawdown, maxDrawdowns, true),
+    maxDrawdownScore: calculatePercentileRank(metrics.maxDrawdown, maxDrawdowns, false), // Max DD is negative, so higher (less negative) is better
     financialLeverageScore: calculatePercentileRank(metrics.financialLeverage, financialLeverages, true)
   }))
 }
@@ -589,7 +595,7 @@ export function calculateBenchmarkRelativeScores(
     // RISK scores (lower is better - inverted)
     beta3YrScore: calculateBenchmarkRelativeScore(stockMetrics.beta3Yr, benchmarkMetrics.beta3Yr, true),
     volatility60DayScore: calculateBenchmarkRelativeScore(stockMetrics.volatility60Day, benchmarkMetrics.volatility60Day, true),
-    maxDrawdownScore: calculateBenchmarkRelativeScore(stockMetrics.maxDrawdown, benchmarkMetrics.maxDrawdown, true),
+    maxDrawdownScore: calculateBenchmarkRelativeScore(stockMetrics.maxDrawdown, benchmarkMetrics.maxDrawdown, false), // Max DD is negative, so higher (less negative) is better
     financialLeverageScore: null // Skipped
   }
 }
@@ -633,6 +639,7 @@ export function calculateBenchmarkConstituentScores(
   const beta3Yrs = constituentMetrics.map(m => m.beta3Yr)
   const volatility60Days = constituentMetrics.map(m => m.volatility60Day)
   const maxDrawdowns = constituentMetrics.map(m => m.maxDrawdown)
+  const financialLeverages = constituentMetrics.map(m => m.financialLeverage)
   
   return {
     // VALUE scores (lower is better - inverted)
@@ -663,8 +670,8 @@ export function calculateBenchmarkConstituentScores(
     // RISK scores (lower is better - inverted)
     beta3YrScore: calculatePercentileRank(stockMetrics.beta3Yr, beta3Yrs, true),
     volatility60DayScore: calculatePercentileRank(stockMetrics.volatility60Day, volatility60Days, true),
-    maxDrawdownScore: calculatePercentileRank(stockMetrics.maxDrawdown, maxDrawdowns, true),
-    financialLeverageScore: null // Skipped
+    maxDrawdownScore: calculatePercentileRank(stockMetrics.maxDrawdown, maxDrawdowns, false), // Max DD is negative, so higher (less negative) is better
+    financialLeverageScore: calculatePercentileRank(stockMetrics.financialLeverage, financialLeverages, true)
   }
 }
 

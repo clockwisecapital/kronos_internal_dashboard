@@ -20,6 +20,7 @@ import {
   isInverseETF,
   getLeverageMultiplier
 } from '@/lib/utils/shorts'
+import { fetchQuotesInBatches } from '@/lib/services/yahooFinance'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -116,13 +117,50 @@ export async function GET(request: Request) {
       console.log(`De-duplicated: ${holdings.length} → ${holdingsToUse.length} holdings`)
     }
 
-    const totalMarketValue = holdingsToUse.reduce((sum, h) => sum + h.market_value, 0)
+    // Fetch real-time prices from Yahoo Finance (like Holdings page does)
+    console.log('Fetching real-time prices for weight calculations...')
+    const tickers = holdingsToUse.map(h => h.stock_ticker)
+    let pricesMap = new Map<string, { current: number; previousClose: number }>()
     
-    const holdingsWithWeights: HoldingWithWeight[] = holdingsToUse.map(h => ({
+    try {
+      const prices = await fetchQuotesInBatches(tickers, 10)
+      pricesMap = new Map(
+        prices.map(p => [
+          p.ticker, 
+          { current: p.currentPrice, previousClose: p.previousClose }
+        ])
+      )
+      console.log(`Loaded ${pricesMap.size} real-time prices from Yahoo Finance`)
+    } catch (priceError) {
+      console.error('Error fetching real-time prices:', priceError)
+      console.log('Falling back to stored market_value from database')
+    }
+
+    // Calculate real-time market values using current prices
+    const holdingsWithRealtimeValues = holdingsToUse.map(h => {
+      const priceData = pricesMap.get(h.stock_ticker)
+      const realtimePrice = priceData?.current
+      const calculated_market_value = realtimePrice 
+        ? (realtimePrice * h.shares) 
+        : h.market_value  // Fallback to stored value if price unavailable
+      return {
+        ...h,
+        realtimePrice,
+        calculated_market_value
+      }
+    })
+
+    // Sum real-time market values to get total portfolio value
+    const totalMarketValue = holdingsWithRealtimeValues.reduce((sum, h) => sum + h.calculated_market_value, 0)
+    
+    console.log(`Total Market Value: Stored=$${holdingsToUse.reduce((sum, h) => sum + h.market_value, 0).toLocaleString()}, Realtime=$${totalMarketValue.toLocaleString()}`)
+    
+    // Calculate weights using real-time values
+    const holdingsWithWeights: HoldingWithWeight[] = holdingsWithRealtimeValues.map(h => ({
       ticker: h.stock_ticker,
       shares: h.shares,
-      market_value: h.market_value,
-      weight: (h.market_value / totalMarketValue) * 100
+      market_value: h.calculated_market_value,  // Use real-time calculated value
+      weight: (h.calculated_market_value / totalMarketValue) * 100
     }))
 
     const indexShortTotals: IndexShortTotals = calculateIndexShortTotals(holdingsWithWeights)

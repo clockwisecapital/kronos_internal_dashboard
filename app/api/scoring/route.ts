@@ -661,7 +661,8 @@ export async function GET(request: Request) {
             "acrcrurals %",
             "FCF",
             "EBITDA LTM",
-            "Sales LTM"
+            "Sales LTM",
+            "ND"
           `)
           .in('Ticker', constituentTickers)
         
@@ -786,11 +787,11 @@ export async function GET(request: Request) {
         return12MEx1MScore: benchmarkRelativeScores.return12MEx1MScore ?? null,
         return3MScore: benchmarkRelativeScores.return3MScore ?? null,
         pct52WeekHighScore: benchmarkRelativeScores.pct52WeekHighScore ?? null,
-        // Stock-specific MOMENTUM metrics from universe percentile (always available)
-        epsSurpriseScore: stockSpecific.epsSurpriseScore,
-        revSurpriseScore: stockSpecific.revSurpriseScore,
-        ntmEpsChangeScore: stockSpecific.ntmEpsChangeScore,
-        ntmRevChangeScore: stockSpecific.ntmRevChangeScore,
+        // MOMENTUM metrics - use benchmark constituents when available, fallback to universe percentile
+        epsSurpriseScore: benchmarkRelativeScores.epsSurpriseScore ?? stockSpecific.epsSurpriseScore,
+        revSurpriseScore: benchmarkRelativeScores.revSurpriseScore ?? stockSpecific.revSurpriseScore,
+        ntmEpsChangeScore: benchmarkRelativeScores.ntmEpsChangeScore ?? stockSpecific.ntmEpsChangeScore,
+        ntmRevChangeScore: benchmarkRelativeScores.ntmRevChangeScore ?? stockSpecific.ntmRevChangeScore,
         // QUALITY from benchmark if available, else universe percentile (always available)
         roicTTMScore: benchmarkRelativeScores.roicTTMScore ?? qualityScores.roicTTMScore,
         grossProfitabilityScore: benchmarkRelativeScores.grossProfitabilityScore ?? qualityScores.grossProfitabilityScore,
@@ -802,7 +803,7 @@ export async function GET(request: Request) {
         beta3YrScore: benchmarkRelativeScores.beta3YrScore ?? null,
         volatility60DayScore: benchmarkRelativeScores.volatility60DayScore ?? null,
         maxDrawdownScore: benchmarkRelativeScores.maxDrawdownScore ?? null,
-        financialLeverageScore: null
+        financialLeverageScore: benchmarkRelativeScores.financialLeverageScore ?? null
       }
       
       const composites = calculateCompositeScores(scored, weights)
