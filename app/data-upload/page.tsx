@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import CSVUploader from '@/components/data/CSVUploader'
+import GoogleDriveSync from '@/components/data/GoogleDriveSync'
 import DataPreview from '@/components/data/DataPreview'
 import { UploadResponse, MultiUploadResponse } from '@/lib/types/csv'
 
@@ -66,6 +67,21 @@ export default function DataUploadPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left Column: Uploader */}
         <div className="space-y-6">
+          {/* Google Drive Sync - New Feature */}
+          <GoogleDriveSync
+            onSyncComplete={(message) => {
+              setUploadResponse({
+                success: true,
+                message,
+                uploadId: crypto.randomUUID(),
+              })
+              setError(null)
+              setProcessingStatus(prev => prev.map(step => ({ ...step, status: 'completed' })))
+            }}
+            onSyncError={handleUploadError}
+          />
+
+          {/* Manual CSV Upload */}
           <CSVUploader
             onUploadComplete={handleUploadComplete}
             onUploadError={handleUploadError}

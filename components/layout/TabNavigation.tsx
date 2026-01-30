@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const tabs = [
-  { name: 'CSV Upload', path: '/data-upload' },
+  { name: 'Data Sync', path: '/data-sync' },
   { name: 'Holdings', path: '/holdings' },
   { name: 'Net Weight Calculations', path: '/portfolio' },
   { name: 'Performance', path: '/performance' },
