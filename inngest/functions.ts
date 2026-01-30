@@ -13,8 +13,8 @@ import {
 } from '@/lib/utils/csvParser'
 import { createServiceRoleClient } from '@/app/utils/supabase/service-role'
 
-// Type definitions
-interface SyncResult {
+// Type for sync results
+type SyncResult = {
   file: string
   tab: string
   rowsProcessed: number
@@ -231,7 +231,7 @@ export const syncDataManual = inngest.createFunction(
     console.log(`${'='.repeat(60)}`)
 
     const results: SyncResult[] = []
-    let totalRows = 0
+    let totalRows: number = 0
 
     // Sync each data source
     for (const fileTypeToSync of filesToSync) {
